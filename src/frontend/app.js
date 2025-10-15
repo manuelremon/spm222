@@ -4892,6 +4892,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         saveDraft();
       });
     }
+    finalizePage();
     return;
   }
 
@@ -4900,9 +4901,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       ev.preventDefault();
       refresh();
     });
-  const modal = $("#solicitudDetailModal");
-  const closeBtn = $("#detailClose");
-  const closeFooterBtn = $("#btnCloseDetail");
+    const modal = $("#solicitudDetailModal");
+    const closeBtn = $("#detailClose");
+    const closeFooterBtn = $("#btnCloseDetail");
     if (modal) {
       modal.addEventListener("click", (ev) => {
         if (ev.target === modal) {
@@ -4941,6 +4942,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         closeSolicitudDetailModal();
       }
     });
+    finalizePage();
     await refresh();
     const pendingSolicitudId = sessionStorage.getItem(PENDING_SOLICITUD_KEY);
     if (pendingSolicitudId) {
@@ -4955,4 +4957,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 });
-
