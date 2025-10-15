@@ -1,0 +1,14 @@
+# Virtualenv / cache / artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local data & logs
+src/backend/logs/
+src/backend/data/*.db
+
+# OS cruft
+.DS_Store
+Thumbs.db

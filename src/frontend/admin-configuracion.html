@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPM · Configuración General</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="main-container">
+
+    <header class="app-header" id="globalNav" data-nav-open="false">
+      <div class="app-header__inner">
+        <a class="app-logo" href="home.html" aria-label="Ir al inicio">
+          <img src="assets/spm-logo.svg" alt="Logotipo de SPM"/>
+        </a>
+        <button type="button" class="app-header__toggle" id="navToggle" aria-controls="primaryNav" aria-expanded="false">
+          <span class="sr-only">Alternar navegación</span>
+          <span class="app-header__toggle-bar"></span>
+          <span class="app-header__toggle-bar"></span>
+          <span class="app-header__toggle-bar"></span>
+        </button>
+        <nav class="app-nav" id="primaryNav" aria-label="Navegación principal">
+          <ul class="app-menu" role="menubar">
+            <li class="app-menu__item has-submenu" data-menu="inicio" role="none">
+              <button type="button" class="app-menu__trigger" aria-haspopup="true" aria-expanded="false">
+                <span>Inicio</span>
+                <span class="app-menu__caret" aria-hidden="true"></span>
+              </button>
+              <div class="app-submenu" role="menu" hidden aria-hidden="true">
+                <a href="mi-cuenta.html" class="app-submenu__link" role="menuitem">Mi Cuenta</a>
+                <a href="preferencias.html" class="app-submenu__link" role="menuitem">Preferencias</a>
+                <button type="button" class="app-submenu__link" id="menuCerrarSesion" role="menuitem">Cerrar sesión</button>
+                <button type="button" class="app-submenu__link" id="menuAyuda" role="menuitem">Ayuda</button>
+              </div>
+            </li>
+            <li class="app-menu__item has-submenu" data-menu="solicitudes" role="none">
+              <button type="button" class="app-menu__trigger" aria-haspopup="true" aria-expanded="false">
+                <span>Solicitudes</span>
+                <span class="app-menu__caret" aria-hidden="true"></span>
+              </button>
+              <div class="app-submenu" role="menu" hidden aria-hidden="true">
+                <a href="mis-solicitudes.html" class="app-submenu__link" role="menuitem">Mis solicitudes</a>
+                <a href="crear-solicitud.html" class="app-submenu__link" role="menuitem">Crear solicitud</a>
+              </div>
+            </li>
+            <li class="app-menu__item" role="none">
+              <a href="notificaciones.html" class="app-menu__link has-badge" role="menuitem">Notificaciones <span class="badge hide" id="navNotificationsBadge">0</span></a>
+            </li>
+            <li class="app-menu__item" role="none">
+              <a href="presupuesto.html" class="app-menu__link hide" id="navPresupuesto" role="menuitem">Presupuesto</a>
+            </li>
+            <li class="app-menu__item has-submenu hide" id="adminMenuItem" data-menu="admin" role="none"></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+<main class="content">
+      <div class="content-section content-section--wide">
+        <div class="page-header">
+          <div>
+            <p class="overline">Administración</p>
+            <h1>Configuración general</h1>
+            <p class="muted">Gestioná los catálogos maestros utilizados en solicitudes, usuarios y presupuesto.</p>
+          </div>
+          <button class="btn sec" type="button" id="adminConfigRefreshAll">Actualizar todo</button>
+        </div>
+        <section class="pane admin-config-block" data-config-section="centros">
+          <header class="section-head admin-config-head">
+            <div>
+              <h2>Centros logísticos</h2>
+              <p class="helper">Códigos y descripciones utilizadas en las solicitudes.</p>
+            </div>
+            <div class="config-actions">
+              <button class="btn sec" type="button" data-config-refresh="centros">Actualizar</button>
+            </div>
+          </header>
+          <form class="form-grid config-form" data-resource="centros">
+            <div class="field">
+              <label for="configCentrosCodigo">Código *</label>
+              <input id="configCentrosCodigo" name="codigo" placeholder="Ej. 1008" required>
+            </div>
+            <div class="field">
+              <label for="configCentrosNombre">Nombre visible</label>
+              <input id="configCentrosNombre" name="nombre" placeholder="Nombre corto (opcional)">
+            </div>
+            <div class="field">
+              <label for="configCentrosDescripcion">Descripción</label>
+              <input id="configCentrosDescripcion" name="descripcion" placeholder="Descripción o alias">
+            </div>
+            <div class="field">
+              <label for="configCentrosNotas">Notas internas</label>
+              <input id="configCentrosNotas" name="notas" placeholder="Notas de referencia">
+            </div>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" name="activo" checked>
+                <span>Activo</span>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn pri" data-role="submit">Agregar</button>
+              <button type="button" class="btn sec" data-role="cancel" hidden>Cancelar</button>
+            </div>
+          </form>
+          <div class="table">
+            <table data-config-table="centros" data-sortable-table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Notas</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="table-empty" data-config-empty="centros">No hay centros cargados.</p>
+          </div>
+        </section>
+
+        <section class="pane admin-config-block" data-config-section="almacenes">
+          <header class="section-head admin-config-head">
+            <div>
+              <h2>Almacenes virtuales</h2>
+              <p class="helper">Alias y centros vinculados para depósitos virtuales.</p>
+            </div>
+            <div class="config-actions">
+              <button class="btn sec" type="button" data-config-refresh="almacenes">Actualizar</button>
+            </div>
+          </header>
+          <form class="form-grid config-form" data-resource="almacenes">
+            <div class="field">
+              <label for="configAlmacenesCodigo">Código *</label>
+              <input id="configAlmacenesCodigo" name="codigo" placeholder="Ej. AV-CENTRAL" required>
+            </div>
+            <div class="field">
+              <label for="configAlmacenesNombre">Nombre visible</label>
+              <input id="configAlmacenesNombre" name="nombre" placeholder="Etiqueta para mostrar">
+            </div>
+            <div class="field">
+              <label for="configAlmacenesCentro">Centro asociado</label>
+              <input id="configAlmacenesCentro" name="centro_codigo" placeholder="Código de centro (opcional)">
+            </div>
+            <div class="field">
+              <label for="configAlmacenesDescripcion">Descripción</label>
+              <input id="configAlmacenesDescripcion" name="descripcion" placeholder="Descripción adicional">
+            </div>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" name="activo" checked>
+                <span>Activo</span>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn pri" data-role="submit">Agregar</button>
+              <button type="button" class="btn sec" data-role="cancel" hidden>Cancelar</button>
+            </div>
+          </form>
+          <div class="table">
+            <table data-config-table="almacenes" data-sortable-table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Centro</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="table-empty" data-config-empty="almacenes">No hay almacenes configurados.</p>
+          </div>
+        </section>
+
+        <section class="pane admin-config-block" data-config-section="roles">
+          <header class="section-head admin-config-head">
+            <div>
+              <h2>Roles corporativos</h2>
+              <p class="helper">Roles disponibles para administrar permisos y aprobaciones.</p>
+            </div>
+            <div class="config-actions">
+              <button class="btn sec" type="button" data-config-refresh="roles">Actualizar</button>
+            </div>
+          </header>
+          <form class="form-grid config-form" data-resource="roles">
+            <div class="field">
+              <label for="configRolesNombre">Nombre *</label>
+              <input id="configRolesNombre" name="nombre" placeholder="Ej. Administrador" required>
+            </div>
+            <div class="field">
+              <label for="configRolesDescripcion">Descripción</label>
+              <input id="configRolesDescripcion" name="descripcion" placeholder="Describe el alcance del rol">
+            </div>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" name="activo" checked>
+                <span>Activo</span>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn pri" data-role="submit">Agregar</button>
+              <button type="button" class="btn sec" data-role="cancel" hidden>Cancelar</button>
+            </div>
+          </form>
+          <div class="table">
+            <table data-config-table="roles" data-sortable-table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="table-empty" data-config-empty="roles">No hay roles configurados.</p>
+          </div>
+        </section>
+
+        <section class="pane admin-config-block" data-config-section="puestos">
+          <header class="section-head admin-config-head">
+            <div>
+              <h2>Puestos y posiciones</h2>
+              <p class="helper">Catálogo de puestos para asignar a los usuarios.</p>
+            </div>
+            <div class="config-actions">
+              <button class="btn sec" type="button" data-config-refresh="puestos">Actualizar</button>
+            </div>
+          </header>
+          <form class="form-grid config-form" data-resource="puestos">
+            <div class="field">
+              <label for="configPuestosNombre">Nombre *</label>
+              <input id="configPuestosNombre" name="nombre" placeholder="Ej. Gerente Regional" required>
+            </div>
+            <div class="field">
+              <label for="configPuestosDescripcion">Descripción</label>
+              <input id="configPuestosDescripcion" name="descripcion" placeholder="Funciones principales (opcional)">
+            </div>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" name="activo" checked>
+                <span>Activo</span>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn pri" data-role="submit">Agregar</button>
+              <button type="button" class="btn sec" data-role="cancel" hidden>Cancelar</button>
+            </div>
+          </form>
+          <div class="table">
+            <table data-config-table="puestos" data-sortable-table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="table-empty" data-config-empty="puestos">No hay puestos cargados.</p>
+          </div>
+        </section>
+
+        <section class="pane admin-config-block" data-config-section="sectores">
+          <header class="section-head admin-config-head">
+            <div>
+              <h2>Sectores operativos</h2>
+              <p class="helper">Lista de sectores disponible para usuarios y solicitudes.</p>
+            </div>
+            <div class="config-actions">
+              <button class="btn sec" type="button" data-config-refresh="sectores">Actualizar</button>
+            </div>
+          </header>
+          <form class="form-grid config-form" data-resource="sectores">
+            <div class="field">
+              <label for="configSectoresNombre">Nombre *</label>
+              <input id="configSectoresNombre" name="nombre" placeholder="Ej. Mantenimiento" required>
+            </div>
+            <div class="field">
+              <label for="configSectoresDescripcion">Descripción</label>
+              <input id="configSectoresDescripcion" name="descripcion" placeholder="Detalle del sector (opcional)">
+            </div>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" name="activo" checked>
+                <span>Activo</span>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn pri" data-role="submit">Agregar</button>
+              <button type="button" class="btn sec" data-role="cancel" hidden>Cancelar</button>
+            </div>
+          </form>
+          <div class="table">
+            <table data-config-table="sectores" data-sortable-table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="table-empty" data-config-empty="sectores">No hay sectores cargados.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
+
