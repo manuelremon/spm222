@@ -118,6 +118,27 @@ function formatPercentage(value) {
   return `${numeric.toFixed(digits)}%`;
 }
 
+const ICONS = {
+  pencil: `
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+      <path d="M3 17.25V21h3.75l11-11-3.75-3.75-11 11ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z"></path>
+    </svg>
+  `,
+  plus: `
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+      <path d="M13 11V5a1 1 0 0 0-2 0v6H5a1 1 0 0 0 0 2h6v6a1 1 0 0 0 2 0v-6h6a1 1 0 0 0 0-2Z"></path>
+    </svg>
+  `,
+};
+
+const centersRequestState = {
+  modal: null,
+  selected: new Set(),
+  options: [],
+  existing: new Set(),
+  keyListenerBound: false,
+};
+
 const ANIMATED_SELECTORS = [
   ".pane",
   ".card",
@@ -1259,6 +1280,7 @@ const state = {
     items: [],
     pending: [],
     unread: 0,
+    admin: null,
   },
   admin: {
     selectedMaterial: null,
@@ -1319,6 +1341,7 @@ async function loadNotificationsSummary(options = {}) {
     state.notifications.items = Array.isArray(resp.items) ? resp.items : [];
     state.notifications.pending = Array.isArray(resp.pending) ? resp.pending : [];
     state.notifications.unread = Number(resp.unread || 0);
+    state.notifications.admin = resp.admin || null;
     updateNotificationBadge();
 
     if (options.markAsRead) {
@@ -1445,7 +1468,8 @@ function bindPendingApprovalActions() {
 }
 
 function renderNotificationsPage(data) {
-
+  const adminData = data?.admin ?? state.notifications.admin;
+  const isAdmin = Boolean(adminData?.is_admin);
   const items = data?.items ?? state.notifications.items;
   const pending = data?.pending ?? state.notifications.pending;
   const container = document.getElementById("notificationsContainer");
@@ -1491,23 +1515,27 @@ function renderNotificationsPage(data) {
   const pendingSection = document.getElementById("pendingApprovalsSection");
   const pendingTable = document.querySelector("#pendingApprovalsTable tbody");
   const pendingEmpty = document.getElementById("pendingApprovalsEmpty");
+  const pendingHelper = pendingSection?.querySelector(".helper");
   const isAprobador = typeof state.me?.rol === "string" && state.me.rol.toLowerCase().includes("aprobador");
+  const shouldShowPending = (isAprobador || isAdmin) && pending && pending.length;
 
-  if (!pendingSection) {
-    return;
+  if (pendingSection) {
+    if (pendingHelper) {
+      pendingHelper.textContent = isAdmin
+        ? "Todas las solicitudes pendientes de aprobacion."
+        : "Estas solicitudes requieren tu accion como aprobador.";
+    }
+    if (!shouldShowPending) {
+      pendingSection.style.display = "none";
+    } else {
+      pendingSection.style.display = "block";
+    }
   }
-
-  if (!isAprobador && (!pending || !pending.length)) {
-    pendingSection.style.display = "none";
-    return;
-  }
-
-  pendingSection.style.display = "block";
   if (pendingTable) {
     pendingTable.innerHTML = "";
   }
 
-  if (pending && pending.length) {
+  if (shouldShowPending && pendingSection) {
     if (pendingTable) {
       pending.forEach((row) => {
         const tr = document.createElement("tr");
@@ -1536,14 +1564,109 @@ function renderNotificationsPage(data) {
     const tableWrapper = document.getElementById("pendingApprovalsTable");
     if (tableWrapper) tableWrapper.style.display = "block";
     if (pendingEmpty) pendingEmpty.style.display = "none";
-  } else {
+  } else if (pendingSection) {
     const tableWrapper = document.getElementById("pendingApprovalsTable");
     if (tableWrapper) tableWrapper.style.display = "none";
     if (pendingEmpty) pendingEmpty.style.display = "block";
   }
 
   bindPendingApprovalActions();
-  refreshSortableTables(pendingSection);
+  if (pendingSection) {
+    refreshSortableTables(pendingSection);
+  }
+
+  const centroSection = document.getElementById("adminCentroRequestsSection");
+  const centroContainer = document.getElementById("adminCentroRequestsContainer");
+  const centroEmpty = document.getElementById("adminCentroRequestsEmpty");
+  if (centroSection) {
+    if (!isAdmin) {
+      centroSection.style.display = "none";
+    } else {
+      const requests = Array.isArray(adminData?.centro_requests) ? adminData.centro_requests : [];
+      if (centroContainer) {
+        centroContainer.innerHTML = "";
+      }
+      if (requests.length && centroContainer) {
+        requests.forEach((request) => {
+          const card = document.createElement("article");
+          card.className = "admin-request-card";
+          const centers = Array.isArray(request.centros) ? request.centros : [];
+          const centersMarkup = centers.length
+            ? `<ul class="admin-request-card__centers">${centers
+                .map((value) => `<li>${escapeHtml(String(value))}</li>`)
+                .join("")}</ul>`
+            : "";
+          const motivoMarkup = request.motivo
+            ? `<div class="admin-request-card__body"><p>${escapeHtml(String(request.motivo))}</p></div>`
+            : `<div class="admin-request-card__body"><p class="muted">Sin motivo proporcionado.</p></div>`;
+          const metaParts = [];
+          if (request.mail) {
+            metaParts.push(escapeHtml(String(request.mail)));
+          }
+          metaParts.push(formatDateTime(request.created_at));
+          card.innerHTML = `
+            <div class="admin-request-card__header">
+              <span class="admin-request-card__title">${escapeHtml(request.solicitante || request.usuario_id || "Usuario")}</span>
+              <div class="admin-request-card__meta">
+                <span>ID ${escapeHtml(String(request.id))}</span>
+                ${metaParts.map((part) => `<span>${part}</span>`).join("")}
+              </div>
+            </div>
+            ${centersMarkup}
+            ${motivoMarkup}
+          `;
+          centroContainer.appendChild(card);
+        });
+        centroSection.style.display = "block";
+        if (centroEmpty) centroEmpty.style.display = "none";
+      } else {
+        centroSection.style.display = "block";
+        if (centroEmpty) centroEmpty.style.display = "block";
+      }
+    }
+  }
+
+  const newUsersSection = document.getElementById("adminNewUsersSection");
+  const newUsersContainer = document.getElementById("adminNewUsersContainer");
+  const newUsersEmpty = document.getElementById("adminNewUsersEmpty");
+  if (newUsersSection) {
+    if (!isAdmin) {
+      newUsersSection.style.display = "none";
+    } else {
+      const users = Array.isArray(adminData?.new_users) ? adminData.new_users : [];
+      if (newUsersContainer) {
+        newUsersContainer.innerHTML = "";
+      }
+      if (users.length && newUsersContainer) {
+        users.forEach((user) => {
+          const card = document.createElement("article");
+          card.className = "admin-request-card";
+          const status = (user.estado || "Pendiente").trim();
+          const metaParts = [];
+          if (user.mail) {
+            metaParts.push(escapeHtml(String(user.mail)));
+          }
+          metaParts.push(escapeHtml(String(user.rol || "")));
+          card.innerHTML = `
+            <div class="admin-request-card__header">
+              <span class="admin-request-card__title">${escapeHtml(`${user.nombre || ""} ${user.apellido || ""}`.trim() || user.id || "Usuario")}</span>
+              <div class="admin-request-card__meta">
+                <span>ID ${escapeHtml(String(user.id || ""))}</span>
+                ${metaParts.map((part) => `<span>${part}</span>`).join("")}
+                <span class="admin-request-card__badge">${escapeHtml(status)}</span>
+              </div>
+            </div>
+          `;
+          newUsersContainer.appendChild(card);
+        });
+        newUsersSection.style.display = "block";
+        if (newUsersEmpty) newUsersEmpty.style.display = "none";
+      } else {
+        newUsersSection.style.display = "block";
+        if (newUsersEmpty) newUsersEmpty.style.display = "block";
+      }
+    }
+  }
 }
 
 function updateMaterialDetailButton() {
@@ -2275,33 +2398,320 @@ async function handleEditPhone() {
   }
 }
 
-async function handleRequestAdditionalCenters() {
-  if (!state.me) {
-    toast("Iniciá sesión para solicitar centros");
-    return;
-  }
-  const centros = prompt("Indicá los centros adicionales que necesitás (separados por coma)");
-  if (centros === null) {
-    return;
-  }
-  const trimmedCentros = centros.trim();
-  if (!trimmedCentros) {
-    toast("Ingresá al menos un centro");
-    return;
-  }
-  const motivo = prompt("Motivo o contexto de la solicitud (opcional)");
-  const trimmedMotivo = motivo?.trim() || null;
-  try {
-    await api("/me/centros/solicitud", {
-      method: "POST",
-      body: JSON.stringify({ centros: trimmedCentros, motivo: trimmedMotivo }),
+function normalizeCentroCode(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function buildCentersRequestOptions() {
+  const ownedValues = parseCentrosList(state.me?.centros);
+  const owned = new Set(ownedValues.map(normalizeCentroCode).filter(Boolean));
+  centersRequestState.existing = owned;
+  const seen = new Set();
+  const options = [];
+  const pushOption = (code, name, description) => {
+    const normalized = normalizeCentroCode(code);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    const cleanName = name ? String(name).trim() : "";
+    const cleanDescription = description ? String(description).trim() : "";
+    const parts = [normalized];
+    if (cleanName && cleanName.toUpperCase() !== normalized) {
+      parts.push(cleanName);
+    }
+    const display = parts.join(" - ");
+    options.push({
+      code: normalized,
+      name: cleanName,
+      description: cleanDescription,
+      label: display,
+      disabled: owned.has(normalized),
     });
-    toast("Solicitud enviada al equipo administrador", true);
-  } catch (err) {
-    toast(err.message);
+    seen.add(normalized);
+  };
+  const catalogCentros = getCatalogItems("centros", { activeOnly: true });
+  catalogCentros.forEach((item) => pushOption(item?.codigo, item?.nombre, item?.descripcion));
+  if (!options.length) {
+    DEFAULT_CENTROS.forEach((code) => pushOption(code, null, null));
+  }
+  options.sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true, sensitivity: "base" }));
+  return options;
+}
+
+function ensureCentersRequestModal() {
+  if (centersRequestState.modal) {
+    return centersRequestState.modal;
+  }
+  const modal = document.createElement("div");
+  modal.id = "centersRequestModal";
+  modal.className = "modal hide";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "centersModalTitle");
+  modal.innerHTML = `
+    <div class="modal-content centers-modal" role="document">
+      <button type="button" class="modal-close" id="centersModalClose" aria-label="Cerrar">&times;</button>
+      <h2 id="centersModalTitle">Solicitar acceso a centros</h2>
+      <p class="centers-modal__intro">Selecciona uno o mas centros disponibles y enviaremos la solicitud al equipo administrador.</p>
+      <div class="centers-modal__controls">
+        <label class="centers-modal__search" for="centersModalSearch">
+          <span class="sr-only">Buscar centros</span>
+          <input type="search" id="centersModalSearch" placeholder="Buscar por codigo o nombre" autocomplete="off"/>
+        </label>
+        <span class="centers-modal__summary"><span id="centersSelectedCount">0</span> seleccionados</span>
+      </div>
+      <div class="centers-cascade" id="centersCascadeList" role="listbox" aria-multiselectable="true"></div>
+      <label class="centers-modal__reason-label" for="centersModalReason">Motivo (opcional)</label>
+      <textarea id="centersModalReason" placeholder="Describe por que necesitas acceso a estos centros..." rows="3"></textarea>
+      <div class="centers-modal__footer">
+        <button type="button" class="btn sec" id="centersModalCancel">Cancelar</button>
+        <button type="button" class="btn pri" id="centersModalSubmit" disabled>Solicitar</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) {
+      closeCentersRequestModal();
+    }
+  });
+  document.body.appendChild(modal);
+  modal.querySelector("#centersModalClose")?.addEventListener("click", () => {
+    closeCentersRequestModal();
+  });
+  modal.querySelector("#centersModalCancel")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeCentersRequestModal();
+  });
+  modal.querySelector("#centersModalSubmit")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    submitCentersRequest();
+  });
+  modal.querySelector("#centersModalSearch")?.addEventListener("input", (ev) => {
+    renderCentersCascade(ev.target.value || "");
+  });
+  if (!centersRequestState.keyListenerBound) {
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && centersRequestState.modal && !centersRequestState.modal.classList.contains("hide")) {
+        closeCentersRequestModal();
+      }
+    });
+    centersRequestState.keyListenerBound = true;
+  }
+  centersRequestState.modal = modal;
+  return modal;
+}
+
+function updateCentersSelectionSummary() {
+  const count = centersRequestState.selected.size;
+  const summary = document.getElementById("centersSelectedCount");
+  if (summary) {
+    summary.textContent = String(count);
+  }
+  const submitBtn = document.getElementById("centersModalSubmit");
+  if (submitBtn && !submitBtn.dataset.loading) {
+    submitBtn.disabled = count === 0;
+    submitBtn.textContent = count > 0 ? `Solicitar (${count})` : "Solicitar";
   }
 }
 
+function renderCentersCascade(searchTerm = "") {
+  const list = document.getElementById("centersCascadeList");
+  if (!list) {
+    return;
+  }
+  const query = String(searchTerm || "").trim().toLowerCase();
+  const options = centersRequestState.options || [];
+  const filtered = options.filter((opt) => {
+    const haystack = `${opt.code} ${opt.name} ${opt.description}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+  if (!filtered.length) {
+    list.innerHTML = '<div class="centers-cascade__empty">No encontramos centros que coincidan con la busqueda.</div>';
+    updateCentersSelectionSummary();
+    return;
+  }
+  const markup = filtered
+    .map((opt) => {
+      const isSelected = centersRequestState.selected.has(opt.code);
+      const disabled = opt.disabled;
+      const classes = ["centers-cascade__option"];
+      if (disabled) classes.push("is-disabled");
+      if (isSelected) classes.push("is-selected");
+      const nameMarkup = opt.name
+        ? `<span class="centers-cascade__name">${escapeHtml(opt.name)}</span>`
+        : "";
+      const descriptionMarkup =
+        opt.description && opt.description !== opt.name
+          ? `<span class="centers-cascade__description">${escapeHtml(opt.description)}</span>`
+          : "";
+      const statusMarkup = disabled ? '<span class="centers-cascade__badge">Ya asignado</span>' : "";
+      return `
+        <label class="${classes.join(" ")}">
+          <div class="centers-cascade__content">
+            <div class="centers-cascade__row">
+              <span class="centers-cascade__code">${escapeHtml(opt.code)}</span>
+              ${nameMarkup}
+              ${statusMarkup}
+            </div>
+            ${descriptionMarkup}
+          </div>
+          <div class="centers-cascade__control">
+            <input type="checkbox" value="${escapeHtml(opt.code)}" ${isSelected ? "checked" : ""} ${disabled ? "disabled" : ""}/>
+            <span class="centers-cascade__indicator" aria-hidden="true"></span>
+          </div>
+        </label>
+      `;
+    })
+    .join("");
+  list.innerHTML = markup;
+  list.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const value = normalizeCentroCode(input.value);
+      if (!value) {
+        return;
+      }
+      if (input.checked) {
+        centersRequestState.selected.add(value);
+      } else {
+        centersRequestState.selected.delete(value);
+      }
+      const option = input.closest(".centers-cascade__option");
+      if (option) {
+        option.classList.toggle("is-selected", input.checked);
+      }
+      updateCentersSelectionSummary();
+    });
+  });
+  updateCentersSelectionSummary();
+}
+
+function openCentersRequestModal() {
+  const modal = ensureCentersRequestModal();
+  centersRequestState.selected = new Set();
+  centersRequestState.options = buildCentersRequestOptions();
+  const searchInput = document.getElementById("centersModalSearch");
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  const reasonInput = document.getElementById("centersModalReason");
+  if (reasonInput) {
+    reasonInput.value = "";
+  }
+  renderCentersCascade("");
+  modal.classList.remove("hide");
+  if (searchInput) {
+    searchInput.focus({ preventScroll: true });
+  }
+}
+
+function closeCentersRequestModal() {
+  if (!centersRequestState.modal) {
+    return;
+  }
+  centersRequestState.modal.classList.add("hide");
+  centersRequestState.selected.clear();
+  updateCentersSelectionSummary();
+}
+
+async function submitCentersRequest() {
+  if (!state.me) {
+    toast("Inicia sesion para solicitar centros");
+    return;
+  }
+  const count = centersRequestState.selected.size;
+  if (count === 0) {
+    toast("Selecciona al menos un centro");
+    return;
+  }
+  const centros = Array.from(centersRequestState.selected).join(", ");
+  const reasonInput = document.getElementById("centersModalReason");
+  const motivo = reasonInput ? reasonInput.value.trim() : "";
+  const submitBtn = document.getElementById("centersModalSubmit");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.dataset.loading = "1";
+    submitBtn.textContent = "Enviando...";
+  }
+  try {
+    await api("/me/centros/solicitud", {
+      method: "POST",
+      body: JSON.stringify({ centros, motivo: motivo || null }),
+    });
+    toast("Solicitud enviada al equipo administrador", true);
+    closeCentersRequestModal();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    if (submitBtn) {
+      delete submitBtn.dataset.loading;
+      updateCentersSelectionSummary();
+    }
+  }
+}
+
+function handleRequestAdditionalCenters() {
+  if (!state.me) {
+    toast("Inicia sesion para solicitar centros");
+    return;
+  }
+  openCentersRequestModal();
+}
+function requestProfileFieldUpdate(field) {
+  if (!state.me) {
+    toast("Inicia sesion para gestionar tu perfil");
+    return;
+  }
+  const identifier = state.me.id || state.me.id_spm || "";
+  const config = {
+    nombre_apellido: {
+      label: "Nombre y Apellido",
+      current: [state.me.nombre, state.me.apellido].filter(Boolean).join(" ").trim(),
+    },
+    posicion: {
+      label: "Posición",
+      current: state.me.posicion || "",
+    },
+    mail: {
+      label: "Mail",
+      current: state.me.mail || "",
+    },
+    id_red: {
+      label: "ID Red",
+      current: state.me.id_red || state.me.id_ypf || "",
+    },
+    sector: {
+      label: "Sector",
+      current: state.me.sector || "",
+    },
+    jefe: {
+      label: "Jefe",
+      current: state.me.jefe || "",
+    },
+    gerente1: {
+      label: "Gerente 1",
+      current: state.me.gerente1 || "",
+    },
+    gerente2: {
+      label: "Gerente 2",
+      current: state.me.gerente2 || "",
+    },
+  };
+  const entry = config[field];
+  if (!entry) {
+    return;
+  }
+  const bodyLines = [
+    "Hola equipo SPM,",
+    `Quisiera actualizar mi ${entry.label.toLowerCase()}.`,
+    identifier ? `ID SPM: ${identifier}` : "",
+    entry.current ? `Valor actual: ${entry.current}` : "",
+    "",
+    "Nuevo valor propuesto:",
+  ];
+  accountSupportMail(`Solicitud de actualizacion de ${entry.label} SPM`, bodyLines);
+}
 function renderAccountDetails() {
   const container = document.getElementById("accountDetails");
   if (!container || !state.me) {
@@ -2312,61 +2722,90 @@ function renderAccountDetails() {
   const phoneValue = state.me.telefono ? String(state.me.telefono).trim() : "";
   const phoneHref = phoneValue ? `tel:${phoneValue.replace(/\s+/g, "")}` : null;
 
+  const pencilIcon = ICONS.pencil.trim();
+  const plusIcon = ICONS.plus.trim();
+  const buildEditButton = (editable, labelText) => {
+    if (!editable) {
+      return "";
+    }
+    const safeLabelForAria = escapeHtml(`Editar ${labelText}`);
+    if (editable.type === "support") {
+      return `<button type="button" class="account-details__icon-btn" data-edit="support" data-field="${editable.field}" aria-label="${safeLabelForAria}">${pencilIcon}</button>`;
+    }
+    if (editable.type === "phone") {
+      return `<button type="button" class="account-details__icon-btn" data-edit="phone" aria-label="${safeLabelForAria}">${pencilIcon}</button>`;
+    }
+    return "";
+  };
+
   const details = [
-    { label: "ID SPM", value: state.me.id || state.me.id_spm || "—" },
+    { label: "ID SPM", value: state.me.id || state.me.id_spm || "-" },
     {
       label: "Nombre y Apellido",
-      value: [state.me.nombre, state.me.apellido].filter(Boolean).join(" ") || "—",
+      value: [state.me.nombre, state.me.apellido].filter(Boolean).join(" ") || "-",
+      editable: { type: "support", field: "nombre_apellido" },
     },
     {
-      label: "Posición",
-      value: state.me.posicion || "—",
+      label: "Posicion",
+      value: state.me.posicion || "-",
+      editable: { type: "support", field: "posicion" },
     },
     {
       label: "Mail",
-      value: emailValue || "—",
+      value: emailValue || "-",
       href: emailValue ? `mailto:${emailValue}` : null,
+      editable: { type: "support", field: "mail" },
     },
     {
       label: "ID Red",
-      value: state.me.id_red || "—",
+      value: state.me.id_red || "-",
+      editable: { type: "support", field: "id_red" },
     },
     {
       label: "Teléfono",
-      value: phoneValue || "—",
+      value: phoneValue || "-",
       href: phoneHref,
+      editable: { type: "phone" },
     },
     {
       label: "Sector",
-      value: state.me.sector || "—",
+      value: state.me.sector || "-",
+      editable: { type: "support", field: "sector" },
     },
     {
       label: "Jefe",
-      value: state.me.jefe || "—",
+      value: state.me.jefe || "-",
       href: state.me.jefe && state.me.jefe.includes("@") ? `mailto:${state.me.jefe}` : null,
+      editable: { type: "support", field: "jefe" },
     },
     {
       label: "Gerente 1",
-      value: state.me.gerente1 || "—",
+      value: state.me.gerente1 || "-",
       href: state.me.gerente1 && state.me.gerente1.includes("@") ? `mailto:${state.me.gerente1}` : null,
+      editable: { type: "support", field: "gerente1" },
     },
     {
       label: "Gerente 2",
-      value: state.me.gerente2 || "—",
+      value: state.me.gerente2 || "-",
       href: state.me.gerente2 && state.me.gerente2.includes("@") ? `mailto:${state.me.gerente2}` : null,
+      editable: { type: "support", field: "gerente2" },
     },
   ];
 
   const detailItems = details
-    .map(({ label, value, href }) => {
+    .map(({ label, value, href, editable }) => {
       const safeLabel = escapeHtml(label);
-      const safeValue = escapeHtml(value || "—");
+      const safeValue = escapeHtml(value || "-");
+      const editButton = buildEditButton(editable, label);
       const valueMarkup = href
         ? `<a class="account-details__link" href="${href}">${safeValue}</a>`
         : `<span class="account-details__value">${safeValue}</span>`;
       return `
         <div class="account-details-grid__item">
-          <span class="account-details-grid__label">${safeLabel}</span>
+          <div class="account-details-grid__header">
+            <span class="account-details-grid__label">${safeLabel}</span>
+            ${editButton}
+          </div>
           ${valueMarkup}
         </div>
       `;
@@ -2383,26 +2822,37 @@ function renderAccountDetails() {
     <div class="account-details-grid">
       ${detailItems}
       <div class="account-details-grid__item">
-        <span class="account-details-grid__label">Centros habilitados</span>
+        <div class="account-details-grid__header">
+          <span class="account-details-grid__label">Centros habilitados</span>
+          <button type="button" class="account-details__icon-btn account-details__icon-btn--add" data-edit="centers" aria-label="Solicitar centros adicionales">${plusIcon}</button>
+        </div>
         <ul class="account-details-centers">${centersMarkup}</ul>
       </div>
     </div>
     <div class="account-details-actions">
-      <button type="button" class="btn sec" id="accountEditPhone">Actualizar teléfono</button>
-      <button type="button" class="btn sec" id="accountRequestCenters">Solicitar centros adicionales</button>
       <button type="button" class="btn sec" id="accountChangePassword">Cambiar contraseña</button>
       <button type="button" class="btn danger" id="accountDeleteAccount">Eliminar cuenta</button>
     </div>
   `;
 
-  on(document.getElementById("accountEditPhone"), "click", (ev) => {
-    ev.preventDefault();
-    handleEditPhone();
+  container.querySelectorAll('.account-details__icon-btn').forEach((button) => {
+    button.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const action = button.dataset.edit;
+      if (action === 'support') {
+        requestProfileFieldUpdate(button.dataset.field);
+        return;
+      }
+      if (action === 'phone') {
+        handleEditPhone();
+        return;
+      }
+      if (action === 'centers') {
+        handleRequestAdditionalCenters();
+      }
+    });
   });
-  on(document.getElementById("accountRequestCenters"), "click", (ev) => {
-    ev.preventDefault();
-    handleRequestAdditionalCenters();
-  });
+
   on(document.getElementById("accountChangePassword"), "click", (ev) => {
     ev.preventDefault();
     requestPasswordChange();
@@ -2657,8 +3107,7 @@ function renderAdminNav() {
       items: [
         { href: "admin-solicitudes.html", label: "Solicitudes" },
         { href: "admin-materiales.html", label: "Materiales" },
-        { href: "admin-centros.html", label: "Centros" },
-        { href: "admin-almacenes.html", label: "Almacenes" },
+        { href: "presupuesto.html", label: "Presupuestos" },
       ],
     },
     {
@@ -4954,6 +5403,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (path === "mi-cuenta.html") {
     renderAccountDetails();
+    finalizePage();
     return;
   }
 });

@@ -70,6 +70,7 @@ curl -i 'http://localhost:5000/api/materiales?q=valvula&limit=5'
 ## Estructura
 
 - `src/backend/`: API Flask, base SQLite y cargas desde CSV.
+- `src/backend/data/Centros.csv`, `Almacenes.csv`, `Roles.csv`, `Puestos.csv`, `Sectores.csv`: catálogos editables sincronizados con Admin > Configuración (corre `python -m backend.init_db` si los modificás manualmente).
 - `src/frontend/`: HTML/CSS/JS estático que se sirve desde Flask o Nginx.
 - `src/agent/`: prototipos FastAPI auxiliares (no requeridos por la app principal, instalar con `pip install -r requirements/agent.txt`).
 - `infra/`: definición de Docker, Nginx y despliegues (Render).

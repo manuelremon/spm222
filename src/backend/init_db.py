@@ -13,6 +13,36 @@ from .security import hash_password
 MigrationFn = Callable[[sqlite3.Connection], None]
 MIGRATIONS: Sequence[tuple[int, MigrationFn]] = ()
 
+CATEGORY_FALSE_TOKENS = {"0", "false", "no", "off", "inactivo", "inactive"}
+
+CATALOG_CSV_SOURCES = {
+    "catalog_centros": {
+        "filename": "Centros.csv",
+        "columns": ("codigo", "nombre", "descripcion", "notas", "activo"),
+        "bools": {"activo"},
+    },
+    "catalog_almacenes": {
+        "filename": "Almacenes.csv",
+        "columns": ("codigo", "nombre", "centro_codigo", "descripcion", "activo"),
+        "bools": {"activo"},
+    },
+    "catalog_roles": {
+        "filename": "Roles.csv",
+        "columns": ("nombre", "descripcion", "activo"),
+        "bools": {"activo"},
+    },
+    "catalog_puestos": {
+        "filename": "Puestos.csv",
+        "columns": ("nombre", "descripcion", "activo"),
+        "bools": {"activo"},
+    },
+    "catalog_sectores": {
+        "filename": "Sectores.csv",
+        "columns": ("nombre", "descripcion", "activo"),
+        "bools": {"activo"},
+    },
+}
+
 
 def _ensure_migration_table(con: sqlite3.Connection) -> None:
     con.execute(
@@ -82,6 +112,17 @@ def _to_float(raw: str | None) -> float:
         return float(value)
     except Exception:
         return 0.0
+
+
+def _to_bool(raw: object, default: bool = True) -> int:
+    if raw is None:
+        return 1 if default else 0
+    if isinstance(raw, (int, float)):
+        return 1 if int(raw) else 0
+    text = str(raw).strip().lower()
+    if not text:
+        return 1 if default else 0
+    return 0 if text in CATEGORY_FALSE_TOKENS else 1
 
 
 def _prepare_material_values(rows: list[dict[str, str]]) -> list[tuple[object, ...]]:
@@ -476,6 +517,10 @@ def build_db(force: bool = False) -> None:
         usuarios_csv = os.path.join(data_dir, "Usuarios.csv")
         materiales_csv = os.path.join(data_dir, "Materiales.csv")
         presupuestos_csv = os.path.join(data_dir, "Presupuestos.csv")
+        catalog_csv_paths = {
+            table: os.path.join(data_dir, meta["filename"])
+            for table, meta in CATALOG_CSV_SOURCES.items()
+        }
 
         usuarios_rows = _load_csv(usuarios_csv)
         if usuarios_rows:
@@ -617,6 +662,51 @@ def build_db(force: bool = False) -> None:
                     """,
                     material_values,
                 )
+
+        for table, meta in CATALOG_CSV_SOURCES.items():
+            path = catalog_csv_paths.get(table)
+            if not path:
+                continue
+            csv_rows = _load_csv(path)
+            if not csv_rows:
+                continue
+            columns = meta["columns"]
+            bool_cols = set(meta.get("bools", ()))  # type: ignore[arg-type]
+            records: list[tuple[object, ...]] = []
+            for row in csv_rows:
+                record: list[object] = []
+                skip = False
+                for col in columns:
+                    key = _normalize_key(col)
+                    value: object | None = row.get(key)
+                    if col in bool_cols:
+                        value = _to_bool(value)
+                    else:
+                        text = (value or "").strip() if isinstance(value, str) else value
+                        value = text or None
+                    if col == columns[0] and not value:
+                        skip = True
+                        break
+                    record.append(value)
+                if not skip:
+                    records.append(tuple(record))
+            if not records:
+                continue
+            placeholders = ",".join(["?"] * len(columns))
+            update_parts = []
+            for col in columns:
+                if col in bool_cols:
+                    update_parts.append(f"{col}=excluded.{col}")
+                else:
+                    update_parts.append(f"{col}=COALESCE(excluded.{col}, {table}.{col})")
+            conflict_column = columns[0]
+            con.executemany(
+                f"""
+                INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})
+                ON CONFLICT({conflict_column}) DO UPDATE SET {', '.join(update_parts)}
+                """,
+                records,
+            )
 
         presupuestos_rows = _load_csv(presupuestos_csv)
         if presupuestos_rows:

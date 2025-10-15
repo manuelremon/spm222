@@ -1,7 +1,10 @@
 from __future__ import annotations
+import csv
+import os
 import sqlite3
 from flask import Blueprint, request
 from typing import Any, Dict, List, Optional
+from ..config import Settings
 from ..db import get_connection
 from ..security import verify_access_token, hash_password
 from ..routes.solicitudes import STATUS_PENDING, STATUS_CANCEL_PENDING, STATUS_CANCEL_REJECTED
@@ -17,6 +20,7 @@ CATALOG_RESOURCES: Dict[str, Dict[str, Any]] = {
         "defaults": {"activo": 1},
         "bools": ("activo",),
         "order_by": "codigo COLLATE NOCASE",
+        "csv": {"filename": "Centros.csv", "columns": ("codigo", "nombre", "descripcion", "notas", "activo")},
     },
     "almacenes": {
         "table": "catalog_almacenes",
@@ -25,6 +29,7 @@ CATALOG_RESOURCES: Dict[str, Dict[str, Any]] = {
         "defaults": {"activo": 1},
         "bools": ("activo",),
         "order_by": "codigo COLLATE NOCASE",
+        "csv": {"filename": "Almacenes.csv", "columns": ("codigo", "nombre", "centro_codigo", "descripcion", "activo")},
     },
     "roles": {
         "table": "catalog_roles",
@@ -33,6 +38,7 @@ CATALOG_RESOURCES: Dict[str, Dict[str, Any]] = {
         "defaults": {"activo": 1},
         "bools": ("activo",),
         "order_by": "nombre COLLATE NOCASE",
+        "csv": {"filename": "Roles.csv", "columns": ("nombre", "descripcion", "activo")},
     },
     "puestos": {
         "table": "catalog_puestos",
@@ -41,6 +47,7 @@ CATALOG_RESOURCES: Dict[str, Dict[str, Any]] = {
         "defaults": {"activo": 1},
         "bools": ("activo",),
         "order_by": "nombre COLLATE NOCASE",
+        "csv": {"filename": "Puestos.csv", "columns": ("nombre", "descripcion", "activo")},
     },
     "sectores": {
         "table": "catalog_sectores",
@@ -49,6 +56,7 @@ CATALOG_RESOURCES: Dict[str, Dict[str, Any]] = {
         "defaults": {"activo": 1},
         "bools": ("activo",),
         "order_by": "nombre COLLATE NOCASE",
+        "csv": {"filename": "Sectores.csv", "columns": ("nombre", "descripcion", "activo")},
     },
 }
 
@@ -185,6 +193,33 @@ def _row_to_catalog_item(meta: Dict[str, Any], row: Dict[str, Any]) -> Dict[str,
         if boolean_field in data:
             data[boolean_field] = bool(data[boolean_field])
     return data
+
+
+def _sync_catalog_csv(con: sqlite3.Connection, meta: Dict[str, Any]) -> None:
+    csv_meta = meta.get("csv")
+    if not csv_meta:
+        return
+    filename = csv_meta.get("filename")
+    columns = csv_meta.get("columns") or meta.get("fields") or ()
+    if not filename or not columns:
+        return
+    path = os.path.join(Settings.DATA_DIR, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    table = meta["table"]
+    order_by = meta.get("order_by") or columns[0]
+    column_clause = ", ".join(columns)
+    rows = con.execute(f"SELECT {column_clause} FROM {table} ORDER BY {order_by}").fetchall()
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(columns)
+        bool_columns = set(meta.get("bools", ()))  # type: ignore[arg-type]
+        for row in rows:
+            writer.writerow(
+                [
+                    "" if row[col] is None else (1 if col in bool_columns and bool(row[col]) else row[col])
+                    for col in columns
+                ]
+            )
 
 
 @bp.get("/summary")
@@ -573,6 +608,14 @@ def crear_configuracion(resource: str):
                 "error": {"code": "DUPLICATED", "message": "Ya existe un registro con los mismos datos"},
             }, 409
         row = con.execute(f"SELECT * FROM {table} WHERE id=?", (cur.lastrowid,)).fetchone()
+        if meta.get("csv"):
+            try:
+                _sync_catalog_csv(con, meta)
+            except Exception as err:
+                return {
+                    "ok": False,
+                    "error": {"code": "SYNC_FAILED", "message": f"No se pudo sincronizar el CSV: {err}"},
+                }, 500
     return {"ok": True, "item": _row_to_catalog_item(meta, row)}
 
 
@@ -612,6 +655,14 @@ def actualizar_configuracion(resource: str, item_id: int):
                 "error": {"code": "DUPLICATED", "message": "Los valores generan un duplicado"},
             }, 409
         row = con.execute(f"SELECT * FROM {table} WHERE id=?", (item_id,)).fetchone()
+        if meta.get("csv"):
+            try:
+                _sync_catalog_csv(con, meta)
+            except Exception as err:
+                return {
+                    "ok": False,
+                    "error": {"code": "SYNC_FAILED", "message": f"No se pudo sincronizar el CSV: {err}"},
+                }, 500
     return {"ok": True, "item": _row_to_catalog_item(meta, row)}
 
 
@@ -629,6 +680,14 @@ def eliminar_configuracion(resource: str, item_id: int):
         if cursor.rowcount == 0:
             return {"ok": False, "error": {"code": "NOTFOUND", "message": "Registro no encontrado"}}, 404
         con.commit()
+        if meta.get("csv"):
+            try:
+                _sync_catalog_csv(con, meta)
+            except Exception as err:
+                return {
+                    "ok": False,
+                    "error": {"code": "SYNC_FAILED", "message": f"No se pudo sincronizar el CSV: {err}"},
+                }, 500
     return {"ok": True}
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 from flask import Blueprint, request
 from ..db import get_connection
 from ..security import verify_access_token
@@ -30,6 +31,14 @@ def listar_notificaciones():
     if not uid:
         return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401
     with get_connection() as con:
+        user_row = con.execute(
+            "SELECT id_spm, nombre, apellido, rol, mail FROM usuarios WHERE lower(id_spm)=?",
+            (uid.lower(),),
+        ).fetchone()
+        if not user_row:
+            return {"ok": False, "error": {"code": "NOUSER", "message": "Usuario no encontrado"}}, 404
+        role_value = (user_row.get("rol") or "").lower()
+        is_admin = "admin" in role_value
         rows = con.execute(
             """
             SELECT id, solicitud_id, mensaje, leido, created_at
@@ -54,21 +63,89 @@ def listar_notificaciones():
                     "created_at": row["created_at"],
                 }
             )
-        pending_rows = con.execute(
+        if is_admin:
+            pending_query = """
+                SELECT id, centro, sector, justificacion, total_monto, created_at, status, id_usuario, aprobador_id
+                  FROM solicitudes
+                 WHERE status=?
+                 ORDER BY datetime(created_at) DESC, id DESC
             """
-            SELECT id, centro, sector, justificacion, total_monto, created_at, status
-              FROM solicitudes
-             WHERE lower(aprobador_id)=? AND status=?
-             ORDER BY datetime(created_at) DESC, id DESC
-            """,
-            (uid.lower(), STATUS_PENDING),
-        ).fetchall()
+            pending_params = (STATUS_PENDING,)
+        else:
+            pending_query = """
+                SELECT id, centro, sector, justificacion, total_monto, created_at, status, id_usuario, aprobador_id
+                  FROM solicitudes
+                 WHERE lower(aprobador_id)=? AND status=?
+                 ORDER BY datetime(created_at) DESC, id DESC
+            """
+            pending_params = (uid.lower(), STATUS_PENDING)
+        pending_rows = con.execute(pending_query, pending_params).fetchall()
         pendientes = [dict(r) for r in pending_rows]
+        admin_summary = None
+        if is_admin:
+            centro_requests = []
+            for row in con.execute(
+                """
+                SELECT upr.id,
+                       upr.usuario_id,
+                       upr.payload,
+                       upr.created_at,
+                       COALESCE(u.nombre || ' ' || u.apellido, u.nombre, upr.usuario_id) AS solicitante,
+                       u.mail
+                  FROM user_profile_requests upr
+                  LEFT JOIN usuarios u ON lower(u.id_spm)=lower(upr.usuario_id)
+                 WHERE upr.tipo='centros' AND upr.estado='pendiente'
+                 ORDER BY datetime(upr.created_at) DESC, upr.id DESC
+                """
+            ):
+                payload_raw = row.get("payload") or "{}"
+                try:
+                    payload = json.loads(payload_raw)
+                except json.JSONDecodeError:
+                    payload = {}
+                centros = payload.get("centros") or ""
+                motivo = payload.get("motivo")
+                centro_requests.append(
+                    {
+                        "id": row["id"],
+                        "usuario_id": row["usuario_id"],
+                        "solicitante": row["solicitante"],
+                        "mail": row.get("mail"),
+                        "centros": [part.strip() for part in str(centros).split(",") if part.strip()],
+                        "motivo": motivo,
+                        "created_at": row["created_at"],
+                    }
+                )
+            new_users = []
+            for row in con.execute(
+                """
+                SELECT id_spm, nombre, apellido, mail, rol, estado_registro
+                  FROM usuarios
+                 WHERE LOWER(COALESCE(estado_registro,'')) NOT IN ('activo','aprobado')
+                 ORDER BY rowid DESC
+                """
+            ):
+                new_users.append(
+                    {
+                        "id": row["id_spm"],
+                        "nombre": row["nombre"],
+                        "apellido": row["apellido"],
+                        "mail": row.get("mail"),
+                        "rol": row.get("rol"),
+                        "estado": row.get("estado_registro") or "",
+                    }
+                )
+            admin_summary = {
+                "centro_requests": centro_requests,
+                "new_users": new_users,
+                "is_admin": True,
+            }
     return {
         "ok": True,
         "unread": unread,
         "items": items,
         "pending": pendientes,
+        "admin": admin_summary,
     }
 
 
@@ -104,4 +181,3 @@ def marcar_notificaciones():
             (uid.lower(),),
         ).fetchone()["c"]
     return {"ok": True, "unread": remaining}
-

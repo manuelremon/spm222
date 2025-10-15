@@ -72,8 +72,16 @@ def register():
             if "@" in payload.id:
                 mail = payload.id.lower()
             con.execute(
-                "INSERT INTO usuarios (id_spm, nombre, apellido, rol, contrasena, mail) VALUES (?,?,?,?,?,?)",
-                (payload.id, payload.nombre, payload.apellido, payload.rol, hash_password(payload.password), mail)
+                "INSERT INTO usuarios (id_spm, nombre, apellido, rol, contrasena, mail, estado_registro) VALUES (?,?,?,?,?,?,?)",
+                (
+                    payload.id,
+                    payload.nombre,
+                    payload.apellido,
+                    payload.rol,
+                    hash_password(payload.password),
+                    mail,
+                    "Pendiente",
+                ),
             )
             con.commit()
             return {"ok": True}, 201
@@ -166,5 +174,35 @@ def request_additional_centers():
             """,
             (uid, "centros", json.dumps(content)),
         )
+        display_row = con.execute(
+            "SELECT nombre, apellido FROM usuarios WHERE id_spm=?",
+            (uid,),
+        ).fetchone()
+        display_name = None
+        if display_row:
+            nombre = (display_row["nombre"] or "").strip()
+            apellido = (display_row["apellido"] or "").strip()
+            display_name = " ".join(part for part in (nombre, apellido) if part)
+        requester = display_name or uid
+        mensaje = f"{requester} solicito acceso a los centros {payload.centros}"
+        if payload.motivo:
+            mensaje += f" (Motivo: {payload.motivo})"
+        if len(mensaje) > 480:
+            mensaje = mensaje[:477] + "..."
+        admin_rows = con.execute(
+            "SELECT id_spm FROM usuarios WHERE lower(COALESCE(rol,'')) LIKE ?",
+            ("%admin%",),
+        ).fetchall()
+        notified = set()
+        uid_lower = (uid or "").strip().lower()
+        for row in admin_rows:
+            dest = (row["id_spm"] or "").strip().lower()
+            if not dest or dest == uid_lower or dest in notified:
+                continue
+            con.execute(
+                "INSERT INTO notificaciones (destinatario_id, solicitud_id, mensaje, leido) VALUES (?,?,?,0)",
+                (dest, None, mensaje),
+            )
+            notified.add(dest)
         con.commit()
     return {"ok": True}
