@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from typing import List, Dict
+from urllib.parse import urljoin
 import requests
 from flask import Blueprint, request
 from ..config import Settings
@@ -46,6 +47,21 @@ def _sanitize_history(raw: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return safe_messages
 
 
+def _resolve_ollama_url() -> str:
+    base = (Settings.OLLAMA_ENDPOINT or "").strip() or "http://127.0.0.1:11434"
+    if "://" not in base:
+        base = f"http://{base}"
+    base = base.rstrip("/") + "/"
+    return urljoin(base, "api/chat")
+
+
+def _resolve_ollama_model() -> str:
+    model = (Settings.OLLAMA_MODEL or "").strip()
+    if not model:
+        return "llama3.1"
+    return model
+
+
 @bp.post("/chatbot")
 def invoke_chatbot():
     user_sub = _require_user()
@@ -65,16 +81,17 @@ def invoke_chatbot():
     history = _sanitize_history(history_raw)
     history.append({"role": "user", "content": message})
 
-    target = Settings.OLLAMA_ENDPOINT.rstrip("/") + "/api/chat"
+    target = _resolve_ollama_url()
     body = {
-        "model": Settings.OLLAMA_MODEL,
+        "model": _resolve_ollama_model(),
         "messages": history,
         "stream": False,
     }
 
     try:
         upstream = requests.post(target, json=body, timeout=(5, 120))
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        bp.logger.warning("Ollama unreachable at %s: %s", target, exc)
         return {
             "ok": False,
             "error": {"code": "OLLAMA_UNREACHABLE", "message": "No se pudo conectar con Ollama"},
