@@ -11,7 +11,7 @@ window.addEventListener('error', (e) => {
 });
 const API = (function () {
   if (location.protocol === "file:") {
-    return "http://127.0.0.1:5001/api";
+    return "http://127.0.0.1:5000/api";
   }
   return `${location.origin}/api`;
 })();
@@ -164,6 +164,7 @@ const dynamicFilterHandlers = new WeakMap();
 let animationObserver = null;
 let effectsEnabled = true;
 let headerNavInitialized = false;
+let authPageInitialized = false;
 
 function markAnimatedElements(scope = document) {
   if (!scope || (scope === document && !document.body)) {
@@ -2926,16 +2927,83 @@ async function processProfileRequest(requestId, action) {
 
 // Inicializar carga de solicitudes cuando se carga la página de administración
 function initAuthPage() {
-  on($("#login"), "click", login);
-  on($("#register"), "click", register);
-  on($("#recover"), "click", recover);
-  on($("#help"), "click", help);
-  on($("#registerModalClose"), "click", closeRegisterModal);
-  on($("#registerModalCancel"), "click", closeRegisterModal);
-  on($("#registerForm"), "submit", (e) => {
-    e.preventDefault();
-    submitRegister();
+  if (authPageInitialized) return;
+  const authContainer = document.getElementById("auth");
+  if (!authContainer) return;
+
+  authPageInitialized = true;
+
+  const handleLogin = (event) => {
+    event.preventDefault();
+    login();
+  };
+
+  const idInput = document.getElementById("id");
+  const passwordInput = document.getElementById("pw");
+  on(document.getElementById("login"), "click", handleLogin);
+  [idInput, passwordInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          login();
+        }
+      });
+    }
   });
+
+  on(document.getElementById("register"), "click", (event) => {
+    event.preventDefault();
+    register();
+  });
+
+  on(document.getElementById("recover"), "click", (event) => {
+    event.preventDefault();
+    recover();
+  });
+
+  on(document.getElementById("help"), "click", (event) => {
+    event.preventDefault();
+    help();
+  });
+
+  const registerForm = document.getElementById("registerForm");
+  if (registerForm) {
+    registerForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitRegister();
+    });
+  }
+
+  [document.getElementById("registerModalClose"), document.getElementById("registerModalCancel")]
+    .filter(Boolean)
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        closeRegisterModal();
+      });
+    });
+
+  const registerModal = document.getElementById("registerModal");
+  if (registerModal) {
+    registerModal.addEventListener("click", (event) => {
+      if (event.target === registerModal) {
+        closeRegisterModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      const modal = document.getElementById("registerModal");
+      if (modal && !modal.classList.contains("hide")) {
+        event.preventDefault();
+        closeRegisterModal();
+      }
+    }
+  });
+
+  if (idInput) idInput.focus();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
