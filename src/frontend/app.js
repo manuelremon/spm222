@@ -2964,23 +2964,23 @@ renderNotificationsPage = function(data) {
 };
 
 // ====== SHIMS DE COMPATIBILIDAD (parche rápido) ======
-const fmtMoney   = typeof fmtMoney   === "function" ? fmtMoney   : (v) => formatCurrency(v);
-const fmtDateTime= typeof fmtDateTime=== "function" ? fmtDateTime: (v) => formatDateTime(v);
-const fmtNumber  = typeof fmtNumber  === "function" ? fmtNumber  : (v) => {
+var fmtMoney   = typeof fmtMoney   === "function" ? fmtMoney   : (v) => formatCurrency(v);
+var fmtDateTime= typeof fmtDateTime=== "function" ? fmtDateTime: (v) => formatDateTime(v);
+var fmtNumber  = typeof fmtNumber  === "function" ? fmtNumber  : (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("es-AR") : String(v ?? "");
 };
-const esc        = typeof esc        === "function" ? esc        : (s) => escapeHtml(s);
+var esc        = typeof esc        === "function" ? esc        : (s) => escapeHtml(s);
 
-const toastOk    = typeof toastOk    === "function" ? toastOk    : (m) => toast(m, true);
-const toastErr   = typeof toastErr   === "function" ? toastErr   : (e) => {
+var toastOk    = typeof toastOk    === "function" ? toastOk    : (m) => toast(m, true);
+var toastErr   = typeof toastErr   === "function" ? toastErr   : (e) => {
   const msg = e?.message || String(e || "Error");
   toast(msg);
   console.error(e);
 };
-const toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m);
+var toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m);
 
-const skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
+var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
 // =====================================================
 
 // Módulo Planificador
