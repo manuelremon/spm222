@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPM · Reportes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="main-container">
+
+    <header class="app-header" id="globalNav" data-nav-open="false">
+      <div class="app-header__inner">
+        <a class="app-logo" href="home.html" aria-label="Ir al inicio">
+          <img src="assets/spm-logo.png" alt="Logotipo de SPM"/>
+        </a>
+        <button type="button" class="app-header__toggle" id="navToggle" aria-controls="primaryNav" aria-expanded="false">
+          <span class="sr-only">Alternar navegación</span>
+          <span class="app-header__toggle-bar"></span>
+          <span class="app-header__toggle-bar"></span>
+          <span class="app-header__toggle-bar"></span>
+        </button>
+        <nav class="app-nav" id="primaryNav" aria-label="Navegación principal">
+          <ul class="app-menu" role="menubar">
+            <li class="app-menu__item has-submenu" data-menu="inicio" role="none">
+              <button type="button" class="app-menu__trigger" aria-haspopup="true" aria-expanded="false">
+                <span>Inicio</span>
+                <span class="app-menu__caret" aria-hidden="true"></span>
+              </button>
+              <div class="app-submenu" role="menu" hidden aria-hidden="true">
+                <a href="mi-cuenta.html" class="app-submenu__link" role="menuitem">Mi Cuenta</a>
+                <a href="preferencias.html" class="app-submenu__link" role="menuitem">Preferencias</a>
+                <button type="button" class="app-submenu__link" id="menuCerrarSesion" role="menuitem">Cerrar sesión</button>
+                <button type="button" class="app-submenu__link" id="menuAyuda" role="menuitem">Ayuda</button>
+              </div>
+            </li>
+            <li class="app-menu__item has-submenu" data-menu="solicitudes" role="none">
+              <button type="button" class="app-menu__trigger" aria-haspopup="true" aria-expanded="false">
+                <span>Solicitudes</span>
+                <span class="app-menu__caret" aria-hidden="true"></span>
+              </button>
+              <div class="app-submenu" role="menu" hidden aria-hidden="true">
+                <a href="mis-solicitudes.html" class="app-submenu__link" role="menuitem">Mis solicitudes</a>
+                <a href="crear-solicitud.html" class="app-submenu__link" role="menuitem">Crear solicitud</a>
+              </div>
+            </li>
+            <li class="app-menu__item" role="none">
+              <a href="notificaciones.html" class="app-menu__link has-badge" role="menuitem">Notificaciones <span class="badge hide" id="navNotificationsBadge">0</span></a>
+            </li>
+            <li class="app-menu__item" role="none">
+              <a href="presupuesto.html" class="app-menu__link hide" id="navPresupuesto" role="menuitem">Presupuesto</a>
+            </li>
+            <li class="app-menu__item" role="none">
+              <a href="reportes.html" class="app-menu__link is-current" role="menuitem">Reportes</a>
+            </li>
+            <li class="app-menu__item has-submenu hide" id="adminMenuItem" data-menu="admin" role="none"></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="content-section content-section--reportes" id="reportes-content">
+        <section class="page-header" aria-labelledby="reportesTitle">
+          <h1 class="page-header__title" id="reportesTitle">Reportes</h1>
+          <p class="page-header__description">Visualizá estadísticas y generá reportes de solicitudes y presupuestos</p>
+        </section>
+
+        <div class="reportes-grid">
+          <!-- Resumen General -->
+          <div class="metric-card">
+            <h3 class="metric-card__title">Resumen General</h3>
+            <div class="metric-card__content">
+              <div class="metric-item">
+                <span class="metric-label">Total Solicitudes:</span>
+                <span class="metric-value" id="totalSolicitudes">0</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Solicitudes Activas:</span>
+                <span class="metric-value" id="solicitudesActivas">0</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Solicitudes Completadas:</span>
+                <span class="metric-value" id="solicitudesCompletadas">0</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Monto Total Aprobado:</span>
+                <span class="metric-value" id="montoTotal">USD 0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Solicitudes por Estado -->
+          <div class="metric-card">
+            <h3 class="metric-card__title">Solicitudes por Estado</h3>
+            <div class="metric-card__content">
+              <canvas id="estadoChart" width="300" height="200"></canvas>
+            </div>
+          </div>
+
+          <!-- Solicitudes por Centro -->
+          <div class="metric-card">
+            <h3 class="metric-card__title">Solicitudes por Centro</h3>
+            <div class="metric-card__content">
+              <canvas id="centroChart" width="300" height="200"></canvas>
+            </div>
+          </div>
+
+          <!-- Tendencia Mensual -->
+          <div class="metric-card">
+            <h3 class="metric-card__title">Tendencia Mensual</h3>
+            <div class="metric-card__content">
+              <canvas id="tendenciaChart" width="300" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="reportes-actions">
+          <h2>Generar Reportes</h2>
+          <div class="reportes-filters">
+            <div class="filters-group">
+              <label for="reporteTipo" class="filter-label">Tipo de Reporte:</label>
+              <select id="reporteTipo" class="filter-select">
+                <option value="solicitudes">Solicitudes</option>
+                <option value="presupuestos">Presupuestos</option>
+                <option value="materiales">Materiales</option>
+                <option value="usuarios">Usuarios</option>
+              </select>
+            </div>
+            <div class="filters-group">
+              <label for="reporteFechaDesde" class="filter-label">Fecha Desde:</label>
+              <input type="date" id="reporteFechaDesde" class="filter-input">
+            </div>
+            <div class="filters-group">
+              <label for="reporteFechaHasta" class="filter-label">Fecha Hasta:</label>
+              <input type="date" id="reporteFechaHasta" class="filter-input">
+            </div>
+            <div class="filters-group">
+              <label for="reporteFormato" class="filter-label">Formato:</label>
+              <select id="reporteFormato" class="filter-select">
+                <option value="excel">Excel</option>
+                <option value="pdf">PDF</option>
+              </select>
+            </div>
+          </div>
+          <div class="reportes-buttons">
+            <button type="button" id="generarReporteBtn" class="btn btn--primary">Generar Reporte</button>
+            <button type="button" id="exportarDatosBtn" class="btn btn--secondary">Exportar Datos</button>
+          </div>
+        </div>
+
+        <div class="reportes-recent">
+          <h2>Reportes Recientes</h2>
+          <div class="table-container">
+            <table class="data-table" id="reportesTable">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Período</th>
+                  <th>Formato</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="reportesTableBody">
+                <!-- Los reportes se cargarán dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

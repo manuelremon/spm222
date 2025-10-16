@@ -1336,3 +1336,305 @@ def export_solicitudes_pdf():
     except Exception as exc:
         return _json_error("EXPORT_ERROR", f"Error al exportar a PDF: {exc}", 500)
 
+
+@bp.get("/solicitudes/equipo")
+def listar_solicitudes_equipo():
+    uid = _require_auth()
+    if not uid:
+        return _json_error("NOAUTH", "No autenticado", 401)
+
+    with get_connection() as con:
+        con.row_factory = lambda cursor, row: {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+        # Verificar que el usuario tenga permisos para ver solicitudes del equipo
+        user = _fetch_user(con, uid)
+        if not user:
+            return _json_error("NOTFOUND", "Usuario no encontrado", 404)
+
+        # Verificar si el usuario es jefe o gerente (tiene personas reportando a él)
+        team_user_ids = []
+        user_id = user.get("id_spm") or user.get("id")
+
+        # Buscar usuarios que reporten a este usuario como jefe, gerente1 o gerente2
+        team_rows = con.execute(
+            """
+            SELECT id_spm, id
+              FROM usuarios
+             WHERE lower(jefe) = ? OR lower(gerente1) = ? OR lower(gerente2) = ?
+            """,
+            (user_id.lower(), user_id.lower(), user_id.lower())
+        ).fetchall()
+
+        if not team_rows:
+            # Si no tiene equipo, devolver lista vacía
+            return {"ok": True, "items": [], "total": 0}
+
+        # Recopilar IDs de los miembros del equipo
+        for team_row in team_rows:
+            team_uid = team_row.get("id_spm") or team_row.get("id")
+            if team_uid:
+                team_user_ids.append(team_uid.lower())
+
+        if not team_user_ids:
+            return {"ok": True, "items": [], "total": 0}
+
+        # Crear placeholders para la consulta IN
+        placeholders = ','.join('?' for _ in team_user_ids)
+
+        # Obtener solicitudes de los miembros del equipo
+        rows = con.execute(
+            f"""
+            SELECT s.id, s.id_usuario, s.centro, s.sector, s.justificacion, s.centro_costos, s.almacen_virtual,
+                   s.data_json, s.status, s.aprobador_id, s.total_monto, s.notificado_at,
+                   s.created_at, s.updated_at, s.criticidad, s.fecha_necesidad, s.planner_id,
+                   u.nombre as solicitante_nombre, u.apellido as solicitante_apellido
+              FROM solicitudes s
+              JOIN usuarios u ON lower(s.id_usuario) = lower(u.id_spm) OR lower(s.id_usuario) = lower(u.id)
+             WHERE lower(s.id_usuario) IN ({placeholders})
+          ORDER BY datetime(s.created_at) DESC, s.id DESC
+            """,
+            team_user_ids
+        ).fetchall()
+
+    items = []
+    for row in rows:
+        item = _serialize_row(row, detailed=False)
+        # Agregar nombre del solicitante
+        if row.get("solicitante_nombre") and row.get("solicitante_apellido"):
+            item["solicitante"] = f"{row['solicitante_nombre']} {row['solicitante_apellido']}"
+        items.append(item)
+
+    return {"ok": True, "items": items, "total": len(items)}
+
+
+@bp.get("/reportes/estadisticas")
+def obtener_estadisticas():
+    uid = _require_auth()
+    if not uid:
+        return _json_error("NOAUTH", "No autenticado", 401)
+
+    with get_connection() as con:
+        con.row_factory = lambda cursor, row: {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+        # Estadísticas generales
+        stats = con.execute(
+            """
+            SELECT
+                COUNT(*) as total_solicitudes,
+                COUNT(CASE WHEN status IN ('approved', 'en_tratamiento', 'completed') THEN 1 END) as solicitudes_activas,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as solicitudes_completadas,
+                SUM(CASE WHEN status IN ('approved', 'en_tratamiento', 'completed') THEN total_monto ELSE 0 END) as monto_total
+            FROM solicitudes
+            """
+        ).fetchone()
+
+        # Solicitudes por estado
+        estado_stats = con.execute(
+            """
+            SELECT status, COUNT(*) as cantidad
+            FROM solicitudes
+            GROUP BY status
+            ORDER BY cantidad DESC
+            """
+        ).fetchall()
+
+        # Solicitudes por centro
+        centro_stats = con.execute(
+            """
+            SELECT centro, COUNT(*) as cantidad
+            FROM solicitudes
+            GROUP BY centro
+            ORDER BY cantidad DESC
+            LIMIT 10
+            """
+        ).fetchall()
+
+        # Tendencia mensual (últimos 12 meses)
+        mensual_stats = con.execute(
+            """
+            SELECT
+                strftime('%Y-%m', created_at) as mes,
+                COUNT(*) as cantidad
+            FROM solicitudes
+            WHERE created_at >= date('now', '-12 months')
+            GROUP BY strftime('%Y-%m', created_at)
+            ORDER BY mes
+            """
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "estadisticas": {
+            "total_solicitudes": stats["total_solicitudes"] or 0,
+            "solicitudes_activas": stats["solicitudes_activas"] or 0,
+            "solicitudes_completadas": stats["solicitudes_completadas"] or 0,
+            "monto_total": float(stats["monto_total"] or 0)
+        },
+        "por_estado": [{"estado": row["status"], "cantidad": row["cantidad"]} for row in estado_stats],
+        "por_centro": [{"centro": row["centro"], "cantidad": row["cantidad"]} for row in centro_stats],
+        "tendencia_mensual": [{"mes": row["mes"], "cantidad": row["cantidad"]} for row in mensual_stats]
+    }
+
+
+@bp.get("/reportes/exportar")
+def exportar_reporte():
+    uid = _require_auth()
+    if not uid:
+        return _json_error("NOAUTH", "No autenticado", 401)
+
+    tipo = request.args.get("tipo", "solicitudes")
+    formato = request.args.get("formato", "excel")
+    fecha_desde = request.args.get("fecha_desde")
+    fecha_hasta = request.args.get("fecha_hasta")
+
+    try:
+        with get_connection() as con:
+            con.row_factory = lambda cursor, row: {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+            # Construir consulta base
+            query = """
+                SELECT s.id, s.id_usuario, s.centro, s.sector, s.justificacion, s.centro_costos,
+                       s.almacen_virtual, s.status, s.aprobador_id, s.total_monto, s.created_at,
+                       s.updated_at, s.criticidad, s.fecha_necesidad, s.planner_id,
+                       u.nombre, u.apellido, p.nombre as planner_nombre
+                FROM solicitudes s
+                JOIN usuarios u ON lower(s.id_usuario) = lower(u.id_spm) OR lower(s.id_usuario) = lower(u.id)
+                LEFT JOIN planificadores p ON s.planner_id = p.usuario_id
+            """
+            params = []
+
+            # Agregar filtros de fecha
+            where_clauses = []
+            if fecha_desde:
+                where_clauses.append("s.created_at >= ?")
+                params.append(fecha_desde)
+            if fecha_hasta:
+                where_clauses.append("s.created_at <= ?")
+                params.append(fecha_hasta + " 23:59:59")
+
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+
+            query += " ORDER BY s.created_at DESC"
+
+            rows = con.execute(query, params).fetchall()
+
+        if formato == "excel":
+            return _exportar_excel(rows)
+        elif formato == "pdf":
+            return _exportar_pdf(rows)
+        else:
+            return _json_error("INVALID_FORMAT", "Formato no soportado", 400)
+
+    except Exception as exc:
+        return _json_error("EXPORT_ERROR", f"Error al generar reporte: {exc}", 500)
+
+
+def _exportar_excel(rows):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Solicitudes"
+
+    # Headers
+    headers = [
+        "ID", "Solicitante", "Centro", "Sector", "Estado", "Monto Total",
+        "Fecha Creación", "Fecha Actualización", "Planificador", "Críticidad"
+    ]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+    # Data
+    for row_idx, row in enumerate(rows, 2):
+        ws.cell(row=row_idx, column=1, value=row["id"])
+        ws.cell(row=row_idx, column=2, value=f"{row['nombre']} {row['apellido']}")
+        ws.cell(row=row_idx, column=3, value=row["centro"])
+        ws.cell(row=row_idx, column=4, value=row["sector"])
+        ws.cell(row=row_idx, column=5, value=row["status"])
+        ws.cell(row=row_idx, column=6, value=row["total_monto"])
+        ws.cell(row=row_idx, column=7, value=row["created_at"])
+        ws.cell(row=row_idx, column=8, value=row["updated_at"])
+        ws.cell(row=row_idx, column=9, value=row.get("planner_nombre", ""))
+        ws.cell(row=row_idx, column=10, value=row["criticidad"])
+
+    # Auto-adjust column widths
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column].width = adjusted_width
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"reporte_solicitudes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+def _exportar_pdf(rows):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    story = []
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30,
+    )
+    normal_style = styles['Normal']
+
+    # Título
+    story.append(Paragraph("Reporte de Solicitudes", title_style))
+    story.append(Spacer(1, 20))
+
+    # Tabla de datos
+    data = [["ID", "Solicitante", "Centro", "Estado", "Monto", "Fecha"]]
+
+    for row in rows:
+        data.append([
+            str(row["id"]),
+            f"{row['nombre']} {row['apellido']}",
+            row["centro"] or "",
+            row["status"] or "",
+            f"${row['total_monto']:.2f}" if row["total_monto"] else "$0.00",
+            row["created_at"][:10] if row["created_at"] else ""
+        ])
+
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+
+    story.append(table)
+
+    doc.build(story)
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"reporte_solicitudes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+        mimetype="application/pdf"
+    )
+
