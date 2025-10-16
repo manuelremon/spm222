@@ -5454,6 +5454,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       ev.preventDefault();
       refresh();
     });
+    on($("#btnExportExcel"), "click", (ev) => {
+      ev.preventDefault();
+      exportSolicitudesExcel();
+    });
+    on($("#btnExportPdf"), "click", (ev) => {
+      ev.preventDefault();
+      exportSolicitudesPdf();
+    });
     const modal = $("#solicitudDetailModal");
     const closeBtn = $("#detailClose");
     const closeFooterBtn = $("#btnCloseDetail");
@@ -5504,6 +5512,76 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     return;
   }
+
+async function exportSolicitudesExcel() {
+  try {
+    // Usar la función api() que ya maneja la autenticación
+    const response = await fetch(`${API}/solicitudes/export/excel`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      let err = "Error al exportar a Excel";
+      try {
+        const json = await response.json();
+        err = json.error?.message || err;
+      } catch (_ignored) {}
+      throw new Error(err);
+    }
+
+    // Crear blob y descargar
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mis_solicitudes_${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    toast("Exportación a Excel completada", "success");
+  } catch (err) {
+    console.error("Error exporting to Excel:", err);
+    toast(err.message || "Error al exportar a Excel");
+  }
+}
+
+async function exportSolicitudesPdf() {
+  try {
+    // Usar la función api() que ya maneja la autenticación
+    const response = await fetch(`${API}/solicitudes/export/pdf`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      let err = "Error al exportar a PDF";
+      try {
+        const json = await response.json();
+        err = json.error?.message || err;
+      } catch (_ignored) {}
+      throw new Error(err);
+    }
+
+    // Crear blob y descargar
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mis_solicitudes_${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    toast("Exportación a PDF completada", "success");
+  } catch (err) {
+    console.error("Error exporting to PDF:", err);
+    toast(err.message || "Error al exportar a PDF");
+  }
+}
 
   if (path === "mi-cuenta.html") {
     renderAccountDetails();

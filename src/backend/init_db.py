@@ -77,11 +77,26 @@ def _apply_migrations(con: sqlite3.Connection) -> None:
 
 def _normalize_key(value: str) -> str:
     try:
-        normalized = unicodedata.normalize("NFKD", value or "")
-        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
-    except Exception:
+        if not value:
+            return ""
+        # Convertir a string primero para manejar cualquier tipo de entrada
+        value_str = str(value)
+        # Normalizar Unicode de forma segura
+        normalized = unicodedata.normalize("NFKD", value_str)
+        # Filtrar caracteres de combinación de forma segura
+        result = []
+        for ch in normalized:
+            try:
+                if not unicodedata.combining(ch):
+                    result.append(ch)
+            except (ValueError, TypeError):
+                # Si hay problemas con un carácter, lo omitimos
+                continue
+        normalized = "".join(result)
+    except (UnicodeError, UnicodeDecodeError, KeyboardInterrupt):
         # Fallback si hay problemas con Unicode
-        normalized = (value or "").replace(" ", "").replace("-", "").replace(".", "").replace("/", "").replace("\\", "").replace("\t", "")
+        normalized = str(value or "").replace(" ", "").replace("-", "").replace(".", "").replace("/", "").replace("\\", "").replace("\t", "")
+    # Limpiar caracteres especiales
     for ch in (" ", "-", ".", "/", "\\", "\t"):
         normalized = normalized.replace(ch, "")
     return normalized.lower()

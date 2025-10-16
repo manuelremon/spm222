@@ -3,12 +3,20 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any, Iterable
+from io import BytesIO
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from ..db import get_connection
 from ..schemas import BudgetIncreaseDecision, SolicitudCreate, SolicitudDraft
 from ..security import verify_access_token
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 
 bp = Blueprint("solicitudes", __name__, url_prefix="/api")
@@ -938,4 +946,305 @@ def decidir_cancelacion(sol_id: int):
             con.rollback()
             return _json_error("DB_ERROR", f"No se pudo registrar la decisión: {exc}", 500)
     return {"ok": True, "status": result_status, "accion": accion}
+
+
+@bp.get("/solicitudes/export/excel")
+def export_solicitudes_excel():
+    """Exportar todas las solicitudes del usuario autenticado a Excel"""
+    user_id = _require_auth()
+    if not user_id:
+        return _json_error("UNAUTHORIZED", "Autenticación requerida", 401)
+
+    try:
+        with get_connection() as con:
+            # Obtener todas las solicitudes del usuario
+            solicitudes = con.execute("""
+                SELECT id, centro, sector, centro_costos, almacen_virtual, criticidad,
+                       fecha_necesidad, justificacion, status, created_at, updated_at,
+                       total_estimado, aprobador_id, data_json
+                FROM solicitudes
+                WHERE owner = ?
+                ORDER BY created_at DESC
+            """, (user_id,)).fetchall()
+
+            if not solicitudes:
+                return _json_error("NO_DATA", "No hay solicitudes para exportar", 404)
+
+            # Crear workbook de Excel
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Mis Solicitudes"
+
+            # Estilos
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            alignment = Alignment(horizontal="center", vertical="center")
+
+            # Headers principales
+            headers = [
+                "ID", "Centro", "Sector", "Centro de Costos", "Almacén Virtual",
+                "Criticidad", "Fecha Necesidad", "Justificación", "Estado",
+                "Fecha Creación", "Última Actualización", "Total Estimado", "Aprobador"
+            ]
+
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_num, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = alignment
+
+            # Datos de solicitudes
+            current_row = 2
+            for sol in solicitudes:
+                try:
+                    # Datos principales de la solicitud
+                    ws.cell(row=current_row, column=1, value=sol[0])  # ID
+                    ws.cell(row=current_row, column=2, value=sol[1] or "")  # Centro
+                    ws.cell(row=current_row, column=3, value=sol[2] or "")  # Sector
+                    ws.cell(row=current_row, column=4, value=sol[3] or "")  # Centro Costos
+                    ws.cell(row=current_row, column=5, value=sol[4] or "")  # Almacén Virtual
+                    ws.cell(row=current_row, column=6, value=sol[5] or "")  # Criticidad
+                    ws.cell(row=current_row, column=7, value=sol[6] or "")  # Fecha Necesidad
+                    ws.cell(row=current_row, column=8, value=sol[7] or "")  # Justificación
+                    ws.cell(row=current_row, column=9, value=sol[8] or "")  # Estado
+                    ws.cell(row=current_row, column=10, value=sol[9] or "")  # Fecha Creación
+                    ws.cell(row=current_row, column=11, value=sol[10] or "")  # Última Actualización
+                    ws.cell(row=current_row, column=12, value=sol[11] or 0)  # Total Estimado
+
+                    # Obtener nombre del aprobador si existe
+                    aprobador_name = ""
+                    if sol[12]:  # aprobador_id
+                        try:
+                            aprobador = con.execute("SELECT nombre FROM usuarios WHERE id = ?", (sol[12],)).fetchone()
+                            if aprobador:
+                                aprobador_name = aprobador[0] or ""
+                        except Exception:
+                            aprobador_name = ""
+                    ws.cell(row=current_row, column=13, value=aprobador_name)
+
+                    current_row += 1
+
+                    # Agregar items de la solicitud en filas separadas
+                    data_json = sol[13]
+                    if data_json and isinstance(data_json, str):
+                        try:
+                            data = json.loads(data_json)
+                            items = data.get('items', [])
+                            if items:
+                                # Agregar fila de separación
+                                ws.cell(row=current_row, column=1, value=f"Items de Solicitud #{sol[0]}")
+                                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+                                current_row += 1
+
+                                # Headers de items
+                                item_headers = ["Código", "Descripción", "Unidad", "Precio Unitario", "Cantidad", "Subtotal"]
+                                for col_num, header in enumerate(item_headers, 1):
+                                    cell = ws.cell(row=current_row, column=col_num, value=header)
+                                    cell.font = Font(bold=True)
+                                current_row += 1
+
+                                # Datos de items
+                                for item in items:
+                                    if isinstance(item, dict):
+                                        ws.cell(row=current_row, column=1, value=item.get('codigo', ''))
+                                        ws.cell(row=current_row, column=2, value=item.get('descripcion', ''))
+                                        ws.cell(row=current_row, column=3, value=item.get('unidad', ''))
+                                        ws.cell(row=current_row, column=4, value=item.get('precio_unitario', 0))
+                                        ws.cell(row=current_row, column=5, value=item.get('cantidad', 0))
+                                        ws.cell(row=current_row, column=6, value=item.get('subtotal', 0))
+                                        current_row += 1
+                        except (json.JSONDecodeError, KeyError, TypeError):
+                            # Si hay problemas con el JSON, continuar sin items
+                            pass
+                except Exception as row_error:
+                    # Si hay error en una fila específica, continuar con la siguiente
+                    print(f"Error procesando solicitud {sol[0] if sol else 'unknown'}: {row_error}")
+                    continue
+
+            # Ajustar ancho de columnas
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if cell.value:
+                            cell_length = len(str(cell.value))
+                            if cell_length > max_length:
+                                max_length = cell_length
+                    except Exception:
+                        pass
+                adjusted_width = min(max_length + 2, 50)  # Máximo 50 caracteres de ancho
+                ws.column_dimensions[column_letter].width = adjusted_width
+
+            # Guardar en buffer
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f"mis_solicitudes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    except Exception as exc:
+        print(f"Error en export_solicitudes_excel: {exc}")
+        import traceback
+        traceback.print_exc()
+        return _json_error("EXPORT_ERROR", f"Error al exportar a Excel: {exc}", 500)
+
+
+@bp.get("/solicitudes/export/pdf")
+def export_solicitudes_pdf():
+    """Exportar todas las solicitudes del usuario autenticado a PDF"""
+    user_id = _require_auth()
+    if not user_id:
+        return _json_error("UNAUTHORIZED", "Autenticación requerida", 401)
+
+    try:
+        with get_connection() as con:
+            # Obtener todas las solicitudes del usuario
+            solicitudes = con.execute("""
+                SELECT id, centro, sector, centro_costos, almacen_virtual, criticidad,
+                       fecha_necesidad, justificacion, status, created_at, updated_at,
+                       total_estimado, aprobador_id, data_json
+                FROM solicitudes
+                WHERE owner = ?
+                ORDER BY created_at DESC
+            """, (user_id,)).fetchall()
+
+            if not solicitudes:
+                return _json_error("NO_DATA", "No hay solicitudes para exportar", 404)
+
+            # Crear buffer para el PDF
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4)
+            styles = getSampleStyleSheet()
+
+            # Estilos personalizados
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                spaceAfter=30,
+                alignment=1  # Centrado
+            )
+
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=20,
+                alignment=0  # Izquierda
+            )
+
+            normal_style = styles['Normal']
+
+            story = []
+
+            # Título del documento
+            story.append(Paragraph("Mis Solicitudes - SPM", title_style))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", normal_style))
+            story.append(Spacer(1, 20))
+
+            for sol in solicitudes:
+                # Información de la solicitud
+                story.append(Paragraph(f"Solicitud #{sol[0]}", subtitle_style))
+
+                solicitud_data = [
+                    ["Centro:", sol[1] or "-"],
+                    ["Sector:", sol[2] or "-"],
+                    ["Centro de Costos:", sol[3] or "-"],
+                    ["Almacén Virtual:", sol[4] or "-"],
+                    ["Criticidad:", sol[5] or "-"],
+                    ["Fecha Necesidad:", sol[6] or "-"],
+                    ["Estado:", sol[8] or "-"],
+                    ["Fecha Creación:", sol[9] or "-"],
+                    ["Total Estimado:", f"${sol[11] or 0:.2f}" if sol[11] else "-"],
+                ]
+
+                # Obtener nombre del aprobador
+                if sol[12]:
+                    aprobador = con.execute("SELECT nombre FROM usuarios WHERE id = ?", (sol[12],)).fetchone()
+                    if aprobador:
+                        solicitud_data.append(["Aprobador:", aprobador[0]])
+
+                solicitud_table = Table(solicitud_data, colWidths=[100, 300])
+                solicitud_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+                    ('TEXTCOLOR', (0, 0), (0, -1), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('BACKGROUND', (1, 0), (1, -1), colors.white),
+                ]))
+                story.append(solicitud_table)
+                story.append(Spacer(1, 12))
+
+                # Justificación
+                if sol[7]:
+                    story.append(Paragraph("Justificación:", styles['Heading3']))
+                    story.append(Paragraph(sol[7], normal_style))
+                    story.append(Spacer(1, 12))
+
+                # Items de la solicitud
+                data_json = sol[13]
+                if data_json and isinstance(data_json, str):
+                    try:
+                        data = json.loads(data_json)
+                        items = data.get('items', [])
+                        if items:
+                            story.append(Paragraph("Items Solicitados:", styles['Heading3']))
+
+                            item_data = [["Código", "Descripción", "Unidad", "Precio Unit.", "Cantidad", "Subtotal"]]
+                            for item in items:
+                                item_data.append([
+                                    item.get('codigo', ''),
+                                    item.get('descripcion', ''),
+                                    item.get('unidad', ''),
+                                    f"${item.get('precio_unitario', 0):.2f}",
+                                    str(item.get('cantidad', 0)),
+                                    f"${item.get('subtotal', 0):.2f}"
+                                ])
+
+                            item_table = Table(item_data, colWidths=[60, 150, 50, 70, 60, 70])
+                            item_table.setStyle(TableStyle([
+                                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                                ('ALIGN', (3, 1), (5, -1), 'RIGHT'),
+                                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                            ]))
+                            story.append(item_table)
+                            story.append(Spacer(1, 20))
+                    except json.JSONDecodeError:
+                        pass
+
+                # Separador entre solicitudes
+                story.append(Paragraph("-" * 80, normal_style))
+                story.append(Spacer(1, 20))
+
+            # Generar PDF
+            doc.build(story)
+            buffer.seek(0)
+
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f"mis_solicitudes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                mimetype="application/pdf"
+            )
+
+    except Exception as exc:
+        return _json_error("EXPORT_ERROR", f"Error al exportar a PDF: {exc}", 500)
 

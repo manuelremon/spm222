@@ -14,7 +14,7 @@ from backend.routes.solicitudes import bp as sol_bp
 from backend.routes.notificaciones import bp as notif_bp
 from backend.routes.admin import bp as admin_bp
 from backend.routes.presupuestos import bp as presup_bp
-from backend.routes.chatbot import bp as chatbot_bp
+# from backend.routes.chatbot import bp as chatbot_bp  # Temporalmente comentado para testing
 from backend.routes.catalogos import bp as catalogos_bp
 from backend.routes.archivos import bp as archivos_bp
 from backend.init_db import build_db
@@ -41,8 +41,9 @@ def create_app() -> Flask:
     _setup_logging(app)
     try:
         build_db(force=False)
-    except Exception:
+    except Exception as e:
         app.logger.exception("Failed to initialize database")
+        app.logger.info("Continuing without database initialization")
 
     # Enable CORS for /api/* when developing the frontend separately.
     # Set env SPM_CORS_ORIGINS to a comma-separated list, e.g. "http://localhost:8080,http://127.0.0.1:5173"
@@ -73,7 +74,7 @@ def create_app() -> Flask:
     app.register_blueprint(notif_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(presup_bp)
-    app.register_blueprint(chatbot_bp)
+    # app.register_blueprint(chatbot_bp)  # Temporalmente comentado para testing
     app.register_blueprint(catalogos_bp)
     app.register_blueprint(archivos_bp)
 
