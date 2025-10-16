@@ -1866,27 +1866,43 @@ async function login() {
 }
 
 async function register() {
-  const id = $("#id").value.trim();
-  const password = $("#pw").value;
-  if (!id || password.length < 6) {
-    toast("Ingrese email/usuario y contraseña (mínimo 6 caracteres)");
+  // Mostrar modal de registro
+  $("#registerModal").classList.remove("hide");
+  $("#registerId").focus();
+}
+
+async function submitRegister() {
+  const id = $("#registerId").value.trim();
+  const password = $("#registerPassword").value;
+  const nombre = $("#registerNombre").value.trim();
+  const apellido = $("#registerApellido").value.trim();
+  const rol = $("#registerRol").value;
+
+  if (!id || !password || !nombre || !apellido) {
+    toast("Todos los campos son requeridos");
     return;
   }
-  const nombre = prompt("Nombre:");
-  const apellido = prompt("Apellido:");
-  if (!nombre || !apellido) {
-    toast("Nombre y apellido requeridos");
+
+  if (password.length < 6) {
+    toast("La contraseña debe tener al menos 6 caracteres");
     return;
   }
+
   try {
     await api("/register", {
       method: "POST",
-      body: JSON.stringify({ id, password, nombre, apellido, rol: "Solicitante" }),
+      body: JSON.stringify({ id, password, nombre, apellido, rol }),
     });
     toast("Usuario registrado ✅. Ahora puede iniciar sesión.", true);
+    closeRegisterModal();
   } catch (err) {
     toast(err.message);
   }
+}
+
+function closeRegisterModal() {
+  $("#registerModal").classList.add("hide");
+  $("#registerForm").reset();
 }
 
 function recover() {
@@ -4948,6 +4964,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     on($("#register"), "click", (ev) => {
       ev.preventDefault();
       register();
+    });
+    on($("#registerModalClose"), "click", (ev) => {
+      ev.preventDefault();
+      closeRegisterModal();
+    });
+    on($("#registerModalCancel"), "click", (ev) => {
+      ev.preventDefault();
+      closeRegisterModal();
+    });
+    on($("#registerModalSubmit"), "click", (ev) => {
+      ev.preventDefault();
+      submitRegister();
+    });
+    on($("#registerModal"), "click", (ev) => {
+      if (ev.target === $("#registerModal")) {
+        closeRegisterModal();
+      }
     });
     on($("#recover"), "click", (ev) => {
       ev.preventDefault();

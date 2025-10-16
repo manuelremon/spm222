@@ -69,5 +69,50 @@
       <button class="notification-close" id="notificationClose">&times;</button>
     </div>
   </div>
+
+  <!-- Modal de Registro -->
+  <div class="modal-overlay hide" id="registerModal">
+    <div class="register-modal">
+      <div class="register-modal__header">
+        <h2>Crear cuenta</h2>
+        <p class="register-modal__lead">Complete sus datos para registrarse en SPM</p>
+        <button class="modal-close" id="registerModalClose">&times;</button>
+      </div>
+      <form id="registerForm" class="register-modal__form">
+        <div class="field">
+          <label for="registerId">Usuario o Email</label>
+          <input id="registerId" type="text" placeholder="ej. mjimenez o juan@empresa.com" required autocomplete="username"/>
+          <small>ID SPM o dirección de correo electrónico</small>
+        </div>
+        <div class="field">
+          <label for="registerPassword">Contraseña</label>
+          <input id="registerPassword" type="password" placeholder="Mínimo 6 caracteres" required autocomplete="new-password"/>
+          <small>Debe contener al menos 6 caracteres</small>
+        </div>
+        <div class="field">
+          <label for="registerNombre">Nombre</label>
+          <input id="registerNombre" type="text" placeholder="Su nombre completo" required autocomplete="given-name"/>
+        </div>
+        <div class="field">
+          <label for="registerApellido">Apellido</label>
+          <input id="registerApellido" type="text" placeholder="Su apellido" required autocomplete="family-name"/>
+        </div>
+        <div class="field">
+          <label for="registerRol">Rol</label>
+          <select id="registerRol" required>
+            <option value="Solicitante">Solicitante</option>
+            <option value="Aprobador">Aprobador</option>
+            <option value="Administrador">Administrador</option>
+          </select>
+          <small>Seleccione su rol en la organización</small>
+        </div>
+        <div class="register-modal__actions">
+          <button class="btn sec" type="button" id="registerModalCancel">Cancelar</button>
+          <button class="btn pri register-modal__submit" type="submit" id="registerModalSubmit">Crear cuenta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js" defer></script>
 
