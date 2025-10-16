@@ -1448,6 +1448,75 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
   }
 }
 
+async function decideCentroRequest(id, action, triggerBtn) {
+  if (!id || !action) {
+    return;
+  }
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return;
+  }
+
+  let comentario = null;
+  if (action === "aprobar") {
+    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud de centros #${numericId}?`);
+    if (!confirmed) {
+      return;
+    }
+  } else if (action === "rechazar") {
+    const reason = window.prompt(
+      `Motivo del rechazo para la solicitud de centros #${numericId} (opcional):`,
+      ""
+    );
+    if (reason === null) {
+      return;
+    }
+    comentario = reason.trim() || null;
+    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud de centros #${numericId}?`);
+    if (!confirmed) {
+      return;
+    }
+  } else {
+    return;
+  }
+
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.setAttribute("aria-busy", "true");
+  }
+
+  try {
+    const body = { accion: action };
+    if (comentario) {
+      body.comentario = comentario;
+    }
+    const resp = await api(`/notificaciones/centros/${numericId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!resp?.ok) {
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
+    }
+    const estado = (resp.estado || "").toLowerCase();
+    let okMsg = "Decisión registrada";
+    if (estado === "aprobado") {
+      okMsg = "Solicitud de centros aprobada";
+    } else if (estado === "rechazado") {
+      okMsg = "Solicitud de centros rechazada";
+    }
+    toast(okMsg, true);
+    const updated = await loadNotificationsSummary();
+    renderNotificationsPage(updated);
+  } catch (err) {
+    toast(err.message || "No se pudo registrar la decisión");
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.removeAttribute("aria-busy");
+    }
+  }
+}
+
 function bindPendingApprovalActions() {
   const table = document.getElementById("pendingApprovalsTable");
   if (!table || table.dataset.actionsBound === "1") {
@@ -1464,6 +1533,25 @@ function bindPendingApprovalActions() {
     const action = button.dataset.action;
     const id = button.dataset.id;
     await decideSolicitudDecision(id, action, button);
+  });
+}
+
+function bindCentroRequestActions() {
+  const container = document.getElementById("adminCentroRequestsContainer");
+  if (!container || container.dataset.actionsBound === "1") {
+    return;
+  }
+  container.dataset.actionsBound = "1";
+  container.addEventListener("click", async (event) => {
+    const button = event.target?.closest?.("button[data-center-request-id][data-action]");
+    if (!button) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const action = button.dataset.action;
+    const id = button.dataset.centerRequestId;
+    await decideCentroRequest(id, action, button);
   });
 }
 
@@ -1604,6 +1692,16 @@ function renderNotificationsPage(data) {
             metaParts.push(escapeHtml(String(request.mail)));
           }
           metaParts.push(formatDateTime(request.created_at));
+          const actionsMarkup = `
+            <div class="admin-request-card__actions">
+              <button type="button" class="btn pri" data-center-request-id="${escapeHtml(
+                String(request.id)
+              )}" data-action="aprobar">Aprobar</button>
+              <button type="button" class="btn danger" data-center-request-id="${escapeHtml(
+                String(request.id)
+              )}" data-action="rechazar">Rechazar</button>
+            </div>
+          `;
           card.innerHTML = `
             <div class="admin-request-card__header">
               <span class="admin-request-card__title">${escapeHtml(request.solicitante || request.usuario_id || "Usuario")}</span>
@@ -1614,6 +1712,7 @@ function renderNotificationsPage(data) {
             </div>
             ${centersMarkup}
             ${motivoMarkup}
+            ${actionsMarkup}
           `;
           centroContainer.appendChild(card);
         });
@@ -1626,6 +1725,7 @@ function renderNotificationsPage(data) {
     }
   }
 
+  bindCentroRequestActions();
   const newUsersSection = document.getElementById("adminNewUsersSection");
   const newUsersContainer = document.getElementById("adminNewUsersContainer");
   const newUsersEmpty = document.getElementById("adminNewUsersEmpty");

@@ -519,6 +519,8 @@ body[data-theme="light"] .centers-cascade__indicator{background:#fff;border-colo
 .admin-request-card__centers li{padding:4px 10px;border-radius:999px;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.32);font-size:.78rem;color:var(--txt);}
 .admin-request-card__body{font-size:.85rem;line-height:1.4;color:var(--txt);}
 .admin-request-card__body .muted{font-size:.78rem;}
+.admin-request-card__actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;}
+.admin-request-card__actions .btn{min-width:120px;}
 body[data-theme="light"] .admin-request-card{background:rgba(255,255,255,.95);border-color:rgba(148,163,184,.28);}
 body[data-theme="light"] .admin-request-card__centers li{background:rgba(56,189,248,.18);border-color:rgba(56,189,248,.32);color:#0f172a;}
 body[data-theme="light"] .admin-request-card__badge{background:rgba(148,163,184,.24);border-color:rgba(148,163,184,.35);color:#475569;}

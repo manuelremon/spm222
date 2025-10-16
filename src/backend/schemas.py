@@ -76,3 +76,8 @@ class UpdatePhoneRequest(BaseModel):
 class AdditionalCentersRequest(BaseModel):
     centros: constr(min_length=3, strip_whitespace=True, max_length=200)
     motivo: Optional[constr(strip_whitespace=True, max_length=500)] = None
+
+
+class CentroRequestDecision(BaseModel):
+    accion: Literal["aprobar", "rechazar"]
+    comentario: Optional[constr(strip_whitespace=True, max_length=500)] = None

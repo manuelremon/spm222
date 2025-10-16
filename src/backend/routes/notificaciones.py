@@ -1,13 +1,43 @@
 from __future__ import annotations
 import json
+from datetime import datetime
 from flask import Blueprint, request
 from ..db import get_connection
+from ..schemas import CentroRequestDecision
 from ..security import verify_access_token
 from .solicitudes import STATUS_PENDING
 
 bp = Blueprint("notificaciones", __name__, url_prefix="/api")
 
 COOKIE_NAME = "spm_token"
+
+
+def _parse_centros_value(raw) -> list[str]:
+    """Normalise the stored centres list into a clean sequence."""
+    if not raw:
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        iterable = raw
+    else:
+        text = str(raw).replace(";", ",").strip()
+        if not text:
+            return []
+        if "," in text:
+            iterable = text.split(",")
+        else:
+            iterable = [text]
+    cleaned: list[str] = []
+    seen = set()
+    for value in iterable:
+        text = str(value).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text)
+    return cleaned
 
 
 def _require_auth() -> str | None:
@@ -146,6 +176,141 @@ def listar_notificaciones():
         "items": items,
         "pending": pendientes,
         "admin": admin_summary,
+    }
+
+
+@bp.route(
+    "/notificaciones/centros/<int:request_id>/decision",
+    methods=["POST", "OPTIONS"],
+)
+@bp.route(
+    "/notificaciones/centros/<int:request_id>/decision/",
+    methods=["POST", "OPTIONS"],
+)
+def decidir_solicitud_centros(request_id: int):
+    if request.method == "OPTIONS":
+        # Permite preflight CORS
+        return "", 204
+    uid = _require_auth()
+    if not uid:
+        return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401
+    decision = CentroRequestDecision(**(request.get_json(force=True) or {}))
+    with get_connection() as con:
+        actor_row = con.execute(
+            "SELECT id_spm, rol, nombre, apellido FROM usuarios WHERE lower(id_spm)=?",
+            (uid.lower(),),
+        ).fetchone()
+        if not actor_row:
+            return {"ok": False, "error": {"code": "NOUSER", "message": "Usuario no encontrado"}}, 404
+        role_value = (actor_row.get("rol") or "").lower()
+        if "admin" not in role_value:
+            return {
+                "ok": False,
+                "error": {"code": "FORBIDDEN", "message": "No tiene permisos para realizar esta accion"},
+            }, 403
+        row = con.execute(
+            """
+            SELECT id, usuario_id, payload, estado
+              FROM user_profile_requests
+             WHERE id=? AND tipo='centros'
+            """,
+            (request_id,),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": {"code": "NOTFOUND", "message": "Solicitud no encontrada"}}, 404
+        estado_actual = (row.get("estado") or "").lower()
+        if estado_actual != "pendiente":
+            return {
+                "ok": False,
+                "error": {"code": "NOTPENDING", "message": "La solicitud ya fue procesada"},
+            }, 409
+        payload_raw = row.get("payload") or "{}"
+        try:
+            request_payload = json.loads(payload_raw)
+        except json.JSONDecodeError:
+            request_payload = {}
+        centros_solicitados = _parse_centros_value(request_payload.get("centros"))
+        solicitante_id = (row.get("usuario_id") or "").strip()
+        if not solicitante_id:
+            return {
+                "ok": False,
+                "error": {"code": "BADREQUEST", "message": "Solicitud incompleta"},
+            }, 400
+
+        estado_nuevo = "aprobado" if decision.accion == "aprobar" else "rechazado"
+        centros_actualizados: list[str] | None = None
+        if decision.accion == "aprobar":
+            if not centros_solicitados:
+                return {
+                    "ok": False,
+                    "error": {"code": "NOCENTROS", "message": "La solicitud no contiene centros validos"},
+                }, 400
+            target_row = con.execute(
+                "SELECT centros FROM usuarios WHERE lower(id_spm)=?",
+                (solicitante_id.lower(),),
+            ).fetchone()
+            if not target_row:
+                return {
+                    "ok": False,
+                    "error": {"code": "USERMISSING", "message": "El usuario solicitante no existe"},
+                }, 404
+            existentes = _parse_centros_value(target_row.get("centros"))
+            existentes_keys = {value.lower() for value in existentes}
+            for centro in centros_solicitados:
+                key = centro.lower()
+                if key in existentes_keys:
+                    continue
+                existentes.append(centro)
+                existentes_keys.add(key)
+            centros_actualizados = existentes
+            con.execute(
+                "UPDATE usuarios SET centros=? WHERE lower(id_spm)=?",
+                (", ".join(existentes), solicitante_id.lower()),
+            )
+
+        request_payload = request_payload if isinstance(request_payload, dict) else {}
+        decision_record = {
+            "accion": decision.accion,
+            "comentario": decision.comentario,
+            "resuelto_por": actor_row.get("id_spm"),
+            "resuelto_en": datetime.utcnow().isoformat(timespec="seconds"),
+        }
+        request_payload["_decision"] = decision_record
+        con.execute(
+            """
+            UPDATE user_profile_requests
+               SET estado=?,
+                   payload=?,
+                   updated_at=CURRENT_TIMESTAMP
+             WHERE id=?
+            """,
+            (estado_nuevo, json.dumps(request_payload), request_id),
+        )
+
+        mensaje_parts = [
+            "Tu solicitud de acceso a centros",
+            ", ".join(centros_solicitados) if centros_solicitados else "",
+            f"fue {estado_nuevo}.",
+        ]
+        if decision.comentario:
+            mensaje_parts.append(f"Comentario: {decision.comentario}")
+        mensaje = " ".join(part for part in mensaje_parts if part).strip()
+        if len(mensaje) > 480:
+            mensaje = mensaje[:477] + "..."
+        con.execute(
+            """
+            INSERT INTO notificaciones (destinatario_id, solicitud_id, mensaje, leido)
+            VALUES (?, NULL, ?, 0)
+            """,
+            (solicitante_id.lower(), mensaje),
+        )
+        con.commit()
+
+    return {
+        "ok": True,
+        "estado": estado_nuevo,
+        "usuario_id": solicitante_id,
+        "centros": centros_actualizados,
     }
 
 

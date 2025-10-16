@@ -1,0 +1,2 @@
+.\.venv\Scripts\activate
+python src/backend/app.py
