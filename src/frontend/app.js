@@ -2925,17 +2925,30 @@ async function processProfileRequest(requestId, action) {
 }
 
 // Inicializar carga de solicitudes cuando se carga la página de administración
+function initAuthPage() {
+  on($("#login"), "click", login);
+  on($("#register"), "click", register);
+  on($("#recover"), "click", recover);
+  on($("#help"), "click", help);
+  on($("#registerModalClose"), "click", closeRegisterModal);
+  on($("#registerModalCancel"), "click", closeRegisterModal);
+  on($("#registerForm"), "submit", (e) => {
+    e.preventDefault();
+    submitRegister();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Inicialización robusta de páginas
   const rawPage = window.location.pathname.split("/").pop();
   const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
 
-  if (currentPage === "index.html") {
-    initAuthPage();
-  }
+  const init = () => {
+    if (currentPage === "index.html") {
+      initAuthPage();
+    }
 
-  if (currentPage === "home.html") {
-    me().then(() => {
+    if (currentPage === "home.html") {
       if (state.me) {
         const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
         const userNameNode = document.getElementById("userName");
@@ -2944,14 +2957,14 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         window.location.href = "index.html";
       }
-    }).catch(() => {
-      window.location.href = "index.html";
-    });
-  }
+    }
 
-  if (currentPage === "admin-solicitudes.html") {
-    loadProfileRequests();
-  }
+    if (currentPage === "admin-solicitudes.html") {
+      loadProfileRequests();
+    }
+  };
+
+  me().then(init).catch(init);
 });
 
 // Controlar visibilidad del menú de administración
