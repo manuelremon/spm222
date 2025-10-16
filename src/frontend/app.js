@@ -2817,169 +2817,452 @@ async function submitCentersRequest() {
   }
 }
 
-function requestProfileFieldApproval(field, entry) {
-  const identifier = state.me.id || state.me.id_spm || "";
+// Funciones para gestión de solicitudes de perfil por administradores
 
-  // Mostrar modal para solicitar el nuevo valor
-  const modal = document.createElement("div");
-  modal.className = "modal";
-  modal.innerHTML = `
-    <div class="modal__content">
-      <div class="modal__header">
-        <h3>Solicitar cambio de ${entry.label}</h3>
-        <button type="button" class="modal__close" data-action="close">&times;</button>
-      </div>
-      <div class="modal__body">
-        <p>Tu solicitud será enviada al administrador para aprobación.</p>
-        <div class="field">
-          <label for="currentValue">Valor actual:</label>
-          <input id="currentValue" type="text" value="${escapeHtml(entry.current)}" readonly>
-        </div>
-        <div class="field">
-          <label for="newValue">Nuevo valor solicitado:</label>
-          <input id="newValue" type="text" placeholder="Ingresa el nuevo valor" required>
-        </div>
-        <div class="field">
-          <label for="justification">Justificación:</label>
-          <textarea id="justification" placeholder="Explica por qué necesitas este cambio" required></textarea>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button type="button" class="btn sec" data-action="cancel">Cancelar</button>
-        <button type="button" class="btn pri" data-action="submit">Enviar solicitud</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  const closeModal = () => {
-    modal.remove();
-  };
-
-  modal.addEventListener("click", (ev) => {
-    if (ev.target === modal || ev.target.dataset.action === "close" || ev.target.dataset.action === "cancel") {
-      closeModal();
-    }
-  });
-
-  modal.querySelector('[data-action="submit"]').addEventListener("click", async () => {
-    const newValue = modal.querySelector("#newValue").value.trim();
-    const justification = modal.querySelector("#justification").value.trim();
-
-    if (!newValue || !justification) {
-      toast("Por favor completa todos los campos");
-      return;
+async function loadProfileRequests() {
+  try {
+    const response = await api("/admin/profile-requests");
+    if (!response.ok) {
+      throw new Error(response.error?.message || "Error al cargar solicitudes");
     }
 
-    try {
-      const payload = {
-        field: field,
-        current_value: entry.current,
-        new_value: newValue,
-        justification: justification,
-        user_id: identifier,
-        field_label: entry.label
-      };
+    const requests = response.items || [];
+    renderProfileRequests(requests);
 
-      const response = await api("/user/profile-request", {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        toast("Solicitud enviada al administrador para aprobación");
-        closeModal();
-      } else {
-        throw new Error(response.error?.message || "Error al enviar la solicitud");
-      }
-    } catch (error) {
-      console.error(error);
-      toast(error.message || "Error al enviar la solicitud");
+    // Actualizar contador
+    const totalElement = $("#profileRequestsTotal");
+    if (totalElement) {
+      totalElement.textContent = `${requests.length} solicitud${requests.length !== 1 ? 'es' : ''} pendiente${requests.length !== 1 ? 's' : ''}`;
     }
-  });
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "Error al cargar solicitudes de perfil");
+  }
 }
 
-function handleRequestAdditionalCenters() {
-  const identifier = state.me.id || state.me.id_spm || "";
-  const currentCentros = Array.isArray(state.me.centros) ? state.me.centros.join(", ") : "";
+function renderProfileRequests(requests) {
+  const container = $("#profile-requests-container");
+  if (!container) return;
 
-  // Mostrar modal para solicitar centros adicionales
-  const modal = document.createElement("div");
-  modal.className = "modal";
-  modal.innerHTML = `
-    <div class="modal__content">
-      <div class="modal__header">
-        <h3>Solicitar centros adicionales</h3>
-        <button type="button" class="modal__close" data-action="close">&times;</button>
+  if (requests.length === 0) {
+    container.innerHTML = '<div class="no-data">No hay solicitudes pendientes</div>';
+    return;
+  }
+
+  const html = requests.map(request => `
+    <div class="request-card" data-id="${request.id}">
+      <div class="request-header">
+        <div class="request-info">
+          <strong>${request.solicitante}</strong>
+          <span class="request-mail">${request.mail || ''}</span>
+        </div>
+        <div class="request-date">${new Date(request.created_at).toLocaleDateString()}</div>
       </div>
-      <div class="modal__body">
-        <p>Tu solicitud será enviada al administrador para aprobación.</p>
-        <div class="field">
-          <label for="currentCentros">Centros actuales:</label>
-          <input id="currentCentros" type="text" value="${escapeHtml(currentCentros)}" readonly>
+      <div class="request-details">
+        <div class="field-info">
+          <span class="field-label">Campo:</span> ${request.field_label}
         </div>
-        <div class="field">
-          <label for="newCentros">Nuevos centros solicitados:</label>
-          <input id="newCentros" type="text" placeholder="Ej. Centro Norte, Centro Sur" required>
+        <div class="value-info">
+          <div class="current-value">
+            <span class="value-label">Valor actual:</span> ${request.current_value || 'No definido'}
+          </div>
+          <div class="new-value">
+            <span class="value-label">Valor solicitado:</span> ${request.new_value}
+          </div>
         </div>
-        <div class="field">
-          <label for="justification">Justificación:</label>
-          <textarea id="justification" placeholder="Explica por qué necesitas acceso a estos centros" required></textarea>
-        </div>
+        ${request.justification ? `
+          <div class="justification">
+            <span class="justification-label">Justificación:</span> ${request.justification}
+          </div>
+        ` : ''}
       </div>
-      <div class="modal__footer">
-        <button type="button" class="btn sec" data-action="cancel">Cancelar</button>
-        <button type="button" class="btn pri" data-action="submit">Enviar solicitud</button>
+      <div class="request-actions">
+        <button class="btn btn-success btn-sm" onclick="processProfileRequest(${request.id}, 'approve')">
+          <i class="fas fa-check"></i> Aprobar
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="processProfileRequest(${request.id}, 'reject')">
+          <i class="fas fa-times"></i> Rechazar
+        </button>
       </div>
     </div>
-  `;
+  `).join('');
 
-  document.body.appendChild(modal);
+  container.innerHTML = html;
+}
 
-  const closeModal = () => {
-    modal.remove();
+async function processProfileRequest(requestId, action) {
+  const confirmMessage = action === 'approve'
+    ? '¿Estás seguro de aprobar esta solicitud?'
+    : '¿Estás seguro de rechazar esta solicitud?';
+
+  if (!confirm(confirmMessage)) return;
+
+  try {
+    const response = await api(`/admin/profile-requests/${requestId}`, {
+      method: "POST",
+      body: JSON.stringify({ action })
+    });
+
+    if (response.ok) {
+      toast(response.message || `Solicitud ${action === 'approve' ? 'aprobada' : 'rechazada'} correctamente`);
+      loadProfileRequests(); // Recargar la lista
+    } else {
+      throw new Error(response.error?.message || "Error al procesar la solicitud");
+    }
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "Error al procesar la solicitud");
+  }
+}
+
+// Inicializar carga de solicitudes cuando se carga la página de administración
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.location.pathname.includes("admin-solicitudes.html")) {
+    loadProfileRequests();
+  }
+});
+
+// Controlar visibilidad del menú de administración
+function updateAdminMenuVisibility() {
+  const adminMenuItem = document.getElementById("adminMenuItem");
+  if (!adminMenuItem) return;
+
+  const isAdmin = Boolean(state.notifications?.admin?.is_admin);
+  if (isAdmin) {
+    adminMenuItem.classList.remove("hide");
+  } else {
+    adminMenuItem.classList.add("hide");
+  }
+}
+
+// Llamar a la función cuando se actualiza el estado de las notificaciones
+const originalRenderNotificationsPage = renderNotificationsPage;
+renderNotificationsPage = function(data) {
+  originalRenderNotificationsPage(data);
+  updateAdminMenuVisibility();
+};
+
+// Módulo Planificador
+(function initPlanificador() {
+  if (!/planificador\.html$/.test(location.pathname)) return;
+
+  const state = {
+    pageMias: 0, pagePend: 0, limit: 20,
+    filtros: { centro:"", sector:"", almacen:"", criticidad:"", q:"" },
+    detalle: null // { id, solicitud, tratamiento, dirty: Set(item_index) }
   };
 
-  modal.addEventListener("click", (ev) => {
-    if (ev.target === modal || ev.target.dataset.action === "close" || ev.target.dataset.action === "cancel") {
-      closeModal();
+  // UI refs
+  const tblMias = $("#tblMias tbody");
+  const tblPend = $("#tblPend tbody");
+  const dlg = $("#dlgDetalle");
+  const detMsg = $("#detMsg");
+  const detId = $("#detId");
+  const detMeta = $("#detMeta");
+  const tblItems = $("#tblItems tbody");
+
+  // Eventos de filtros y paginación
+  $("#frmFilters").addEventListener("submit", (e)=>{ e.preventDefault(); state.pageMias=0; state.pagePend=0; loadQueues(); });
+  $("#btnLimpiar").addEventListener("click", ()=>{ /* limpia inputs y reload */ loadQueues(); });
+  $("#pgPrevMias").onclick = ()=>{ state.pageMias = Math.max(0, state.pageMias-1); loadQueues({only:"mias"}); };
+  $("#pgNextMias").onclick = ()=>{ state.pageMias += 1; loadQueues({only:"mias"}); };
+  $("#pgPrevPend").onclick = ()=>{ state.pagePend = Math.max(0, state.pagePend-1); loadQueues({only:"pend"}); };
+  $("#pgNextPend").onclick = ()=>{ state.pagePend += 1; loadQueues({only:"pend"}); };
+
+  async function loadQueues(opts={}) {
+    skeletonize("#tblMias", {rows:8});
+    skeletonize("#tblPend", {rows:8});
+    const q = new URLSearchParams({
+      limit: state.limit,
+      offset_mias: state.pageMias*state.limit,
+      offset_pend: state.pagePend*state.limit,
+      centro: $("#fCentro").value.trim(),
+      sector: $("#fSector").value.trim(),
+      almacen_virtual: $("#fAlmacen").value.trim(),
+      criticidad: $("#fCriticidad").value,
+      q: $("#fQ").value.trim()
+    });
+    const data = await api(`/planificador/queue?${q.toString()}`);
+    renderQueue(data, opts.only);
+  }
+
+  function renderQueue(data, only) {
+    if (!only || only==="mias") {
+      tblMias.innerHTML = data.mias.map(rowToHtml).join("");
+      attachRowActions("#tblMias");
+      $("#pgInfoMias").textContent = `${data.count.mias} total`;
     }
-  });
-
-  modal.querySelector('[data-action="submit"]').addEventListener("click", async () => {
-    const newCentros = modal.querySelector("#newCentros").value.trim();
-    const justification = modal.querySelector("#justification").value.trim();
-
-    if (!newCentros || !justification) {
-      toast("Por favor completa todos los campos");
-      return;
+    if (!only || only==="pend") {
+      tblPend.innerHTML = data.pendientes.map(rowToHtml).join("");
+      attachRowActions("#tblPend", {pendientes:true});
+      $("#pgInfoPend").textContent = `${data.count.pendientes} total`;
     }
+    refreshSortableTables();
+  }
 
-    try {
-      const payload = {
-        field: "centros",
-        current_value: currentCentros,
-        new_value: newCentros,
-        justification: justification,
-        user_id: identifier,
-        field_label: "Centros habilitados"
-      };
+  function rowToHtml(r) {
+    const btn = r.planner_id ?
+      `<button class="btn sm view" data-action="ver" data-id="${r.id}">Ver/Editar</button>
+       <button class="btn sm ghost liberar" data-action="liberar" data-id="${r.id}">Liberar</button>` :
+      `<button class="btn sm take" data-action="tomar" data-id="${r.id}">Tomar</button>`;
+    return `
+      <tr>
+        <td>${r.id}</td>
+        <td>${esc(r.centro)}</td>
+        <td>${esc(r.sector)}</td>
+        <td>${esc(r.criticidad || "-")}</td>
+        <td class="num">${fmtMoney(r.total_monto)}</td>
+        <td>${fmtDateTime(r.updated_at)}</td>
+        <td class="end">${btn}</td>
+      </tr>`;
+  }
 
-      const response = await api("/user/profile-request", {
-        method: "POST",
-        body: JSON.stringify(payload)
+  function attachRowActions(sel, opts={}) {
+    document.querySelectorAll(`${sel} [data-action]`).forEach((btn)=>{
+      btn.addEventListener("click", async ()=>{
+        const id = Number(btn.dataset.id);
+        const action = btn.dataset.action;
+        try {
+          if (action==="tomar") {
+            await api(`/planificador/solicitudes/${id}/tomar`, {method:"PATCH"});
+            await loadQueues({only:"pend"});
+            await openDetalle(id);
+          } else if (action==="liberar") {
+            await api(`/planificador/solicitudes/${id}/liberar`, {method:"PATCH"});
+            await loadQueues({only:"mias"});
+          } else if (action==="ver") {
+            await openDetalle(id);
+          }
+        } catch (err) { toastErr(err); }
       });
+    });
+  }
 
-      if (response.ok) {
-        toast("Solicitud enviada al administrador para aprobación");
-        closeModal();
-      } else {
-        throw new Error(response.error?.message || "Error al enviar la solicitud");
-      }
-    } catch (error) {
-      console.error(error);
-      toast(error.message || "Error al enviar la solicitud");
+  async function openDetalle(id) {
+    detMsg.textContent = "";
+    const data = await api(`/planificador/solicitudes/${id}/tratamiento`);
+    state.detalle = { id, data, dirty: new Set() };
+    detId.textContent = `#${id}`;
+    detMeta.innerHTML = renderMeta(data.solicitud);
+    tblItems.innerHTML = data.solicitud.items.map((it, idx)=>itemRow(it, idx, data.tratamiento)).join("");
+    dlg.classList.remove("hide");
+    bindItemInputs();
+  }
+
+  function renderMeta(s) {
+    return `
+      <div><b>Centro:</b> ${esc(s.centro)} | <b>Sector:</b> ${esc(s.sector)} | <b>Criticidad:</b> ${esc(s.criticidad || "-")}</div>
+      <div><b>Justificación:</b> ${esc(s.justificacion || "-")}</div>
+      <div><b>Total estimado:</b> <span id="detTotal">${fmtMoney(s.total_monto || 0)}</span></div>
+    `;
+  }
+
+  function itemRow(it, idx, trat=[]) {
+    const tr = trat.find(x=>x.item_index===idx) || {};
+    return `
+      <tr data-index="${idx}">
+        <td>${idx+1}</td>
+        <td>${esc(it.codigo)}</td>
+        <td>${esc(it.descripcion || "")}</td>
+        <td>${esc(it.unidad || "")}</td>
+        <td class="num">${fmtNumber(it.cantidad)}</td>
+        <td class="num">${fmtMoney(it.precio_unitario || 0)}</td>
+        <td>
+          <select class="decision">
+            ${opt("stock", tr.decision)}${opt("compra", tr.decision)}${opt("servicio", tr.decision)}${opt("equivalente", tr.decision)}
+          </select>
+        </td>
+        <td><input class="cantAprob" type="number" min="0.0001" step="0.0001" value="${tr.cantidad_aprobada ?? it.cantidad}"/></td>
+        <td><input class="eqvCodigo" value="${esc(tr.codigo_equivalente || "")}"/></td>
+        <td><input class="proveedor" value="${esc(tr.proveedor_sugerido || "")}"/></td>
+        <td><input class="precioEst" type="number" min="0" step="0.0001" value="${tr.precio_unitario_estimado ?? (it.precio_unitario || 0)}"/></td>
+        <td><input class="comentario" value="${esc(tr.comentario || "")}"/></td>
+      </tr>`;
+  }
+  const opt = (v, cur)=>`<option value="${v}" ${cur===v?"selected":""}>${v}</option>`;
+
+  function bindItemInputs() {
+    tblItems.querySelectorAll("input,select").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const tr = inp.closest("tr"); const idx = Number(tr.dataset.index);
+        state.detalle.dirty.add(idx);
+        recalcTotal();
+      });
+    });
+    $("#btnGuardarItems").onclick = saveItems;
+    $("#btnFinalizar").onclick = finalizar;
+    $("#btnRechazar").onclick = rechazar;
+    $("#btnLiberar").onclick = liberar;
+    $("#btnCerrar").onclick = ()=> dlg.classList.add("hide");
+    $("#btnAISuggestions").onclick = loadAISuggestions;
+  }
+
+  async function loadAISuggestions() {
+    const id = state.detalle.id;
+    try {
+      const data = await api(`/ai/suggest/solicitud/${id}`);
+      renderAISuggestions(data.suggestions);
+      $("#aiPanel").classList.remove("hide");
+    } catch (err) {
+      toastErr(err);
     }
+  }
+
+  function renderAISuggestions(suggestions) {
+    const container = $("#aiSuggestions");
+    container.innerHTML = suggestions.map(s => `
+      <div class="ai-suggestion ${getConfidenceClass(s.confidence)}">
+        <div class="ai-suggestion__header">
+          <div class="ai-suggestion__title">${esc(s.title)}</div>
+          <div class="ai-suggestion__confidence">${Math.round(s.confidence * 100)}%</div>
+        </div>
+        <div class="ai-suggestion__reason">${esc(s.reason)}</div>
+        <div class="ai-suggestion__sources">
+          ${s.sources.map(src => `<span class="ai-suggestion__source">${esc(src)}</span>`).join("")}
+        </div>
+        <div class="ai-suggestion__actions">
+          <button class="ai-suggestion__apply" data-type="${s.type}" data-payload='${JSON.stringify(s.payload)}' data-item-index="${s.item_index}">Aplicar</button>
+          <button class="ai-suggestion__reject" data-type="${s.type}" data-item-index="${s.item_index}">Descartar</button>
+        </div>
+      </div>
+    `).join("");
+
+    // Bind events
+    container.querySelectorAll(".ai-suggestion__apply").forEach(btn => {
+      btn.onclick = () => applyAISuggestion(btn.dataset.type, JSON.parse(btn.dataset.payload), Number(btn.dataset.itemIndex));
+    });
+    container.querySelectorAll(".ai-suggestion__reject").forEach(btn => {
+      btn.onclick = () => rejectAISuggestion(btn.dataset.type, Number(btn.dataset.itemIndex));
+    });
+  }
+
+  function getConfidenceClass(conf) {
+    if (conf >= 0.8) return "high-confidence";
+    if (conf >= 0.6) return "medium-confidence";
+    return "low-confidence";
+  }
+
+  async function applyAISuggestion(type, payload, itemIndex) {
+    const id = state.detalle.id;
+    try {
+      await api("/ai/suggest/accept", {
+        method: "POST",
+        body: JSON.stringify({ solicitud_id: id, item_index: itemIndex, type, payload })
+      });
+      toastOk("Sugerencia aplicada");
+      // Refresh detalle
+      await openDetalle(id);
+    } catch (err) {
+      toastErr(err);
+    }
+  }
+
+  async function rejectAISuggestion(type, itemIndex) {
+    const id = state.detalle.id;
+    try {
+      await api("/ai/suggest/reject", {
+        method: "POST",
+        body: JSON.stringify({ solicitud_id: id, item_index: itemIndex, type })
+      });
+      toastOk("Sugerencia descartada");
+      // Remove from UI
+      const suggestion = event.target.closest(".ai-suggestion");
+      if (suggestion) suggestion.remove();
+    } catch (err) {
+      toastErr(err);
+    }
+  }
+
+  function recalcTotal() {
+    let total = 0;
+    tblItems.querySelectorAll("tr").forEach(tr=>{
+      const dec = tr.querySelector(".decision").value;
+      const cant = Number(tr.querySelector(".cantAprob").value || 0);
+      const precio = Number(tr.querySelector(".precioEst").value || 0);
+      if (dec==="compra" || dec==="equivalente") total += cant * precio;
+    });
+    $("#detTotal").textContent = fmtMoney(total);
+  }
+
+  async function saveItems() {
+    const id = state.detalle.id;
+    const items = [];
+    state.detalle.dirty.forEach(idx=>{
+      const tr = tblItems.querySelector(`tr[data-index="${idx}"]`);
+      items.push({
+        item_index: idx,
+        decision: tr.querySelector(".decision").value,
+        cantidad_aprobada: Number(tr.querySelector(".cantAprob").value),
+        codigo_equivalente: tr.querySelector(".eqvCodigo").value.trim() || null,
+        proveedor_sugerido: tr.querySelector(".proveedor").value.trim() || null,
+        precio_unitario_estimado: Number(tr.querySelector(".precioEst").value || 0),
+        comentario: tr.querySelector(".comentario").value.trim() || null
+      });
+    });
+    if (!items.length) { toastInfo("No hay cambios"); return; }
+    await api(`/planificador/solicitudes/${id}/tratamiento/items`, {
+      method:"PATCH",
+      body: JSON.stringify({ items })
+    });
+    state.detalle.dirty.clear();
+    toastOk("Cambios guardados");
+  }
+
+  async function finalizar() {
+    const id = state.detalle.id;
+    if (!confirm("¿Finalizar tratamiento?")) return;
+    await api(`/planificador/solicitudes/${id}/finalizar`, { method:"POST" });
+    dlg.classList.add("hide");
+    await loadQueues();
+  }
+
+  async function rechazar() {
+    const id = state.detalle.id;
+    const motivo = prompt("Motivo de rechazo (3..500 caracteres):") || "";
+    if (motivo.trim().length < 3) return;
+    await api(`/planificador/solicitudes/${id}/rechazar`, {
+      method:"POST",
+      body: JSON.stringify({ motivo })
+    });
+    dlg.classList.add("hide");
+    await loadQueues();
+  }
+
+  async function liberar() {
+    const id = state.detalle.id;
+    await api(`/planificador/solicitudes/${id}/liberar`, { method:"PATCH" });
+    dlg.classList.add("hide");
+    await loadQueues();
+  }
+
+  // Estadísticas
+  $("#frmStats").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    await loadStats();
   });
-}
+
+  async function loadStats() {
+    const qs = new URLSearchParams({
+      desde: $("#sDesde").value || "",
+      hasta: $("#sHasta").value || ""
+    });
+    const data = await api(`/planificador/estadisticas?${qs.toString()}`);
+    renderStats(data);
+  }
+
+  function renderStats(d) {
+    $("#statsCards").innerHTML = `
+      <div class="card"><div class="k">En tratamiento</div><div class="v">${d.kpis.en_tratamiento}</div></div>
+      <div class="card"><div class="k">Finalizadas</div><div class="v">${d.kpis.finalizadas}</div></div>
+      <div class="card"><div class="k">Rechazadas</div><div class="v">${d.kpis.rechazadas}</div></div>
+      <div class="card"><div class="k">Tiempo prom. (h)</div><div class="v">${fmtNumber(d.kpis.t_hrs_promedio)}</div></div>
+    `;
+    $("#tblTopCentros tbody").innerHTML = d.top_centros.map(c=>`
+      <tr><td>${esc(c.centro)}</td><td class="num">${c.count}</td><td class="num">${fmtMoney(c.monto)}</td></tr>
+    `).join("");
+  }
+
+  // init
+  loadQueues();
+  loadStats();
+})();

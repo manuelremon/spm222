@@ -21,6 +21,12 @@ class Settings:
     OLLAMA_ENDPOINT = os.getenv("SPM_OLLAMA_URL", "http://127.0.0.1:11434")
     OLLAMA_MODEL = os.getenv("SPM_OLLAMA_MODEL", "mistral")
     
+    # Configuración de IA
+    AI_ENABLE: bool = bool(int(os.getenv("AI_ENABLE", "1")))
+    AI_EMBED_MODEL: str = os.getenv("AI_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")  # si se usa local
+    AI_PRICE_SMOOTHING: float = float(os.getenv("AI_PRICE_SMOOTHING", "0.5"))
+    AI_MAX_SUGGESTIONS: int = int(os.getenv("AI_MAX_SUGGESTIONS", "5"))
+    
     # Configuración de archivos adjuntos
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB máximo por archivo
     ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv'}

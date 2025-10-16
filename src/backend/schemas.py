@@ -81,3 +81,73 @@ class AdditionalCentersRequest(BaseModel):
 class CentroRequestDecision(BaseModel):
     accion: Literal["aprobar", "rechazar"]
     comentario: Optional[constr(strip_whitespace=True, max_length=500)] = None
+
+
+class TratamientoItemUpdate(BaseModel):
+    item_index: conint(ge=0)
+    decision: Literal["stock", "compra", "servicio", "equivalente"]
+    cantidad_aprobada: confloat(gt=0)
+    codigo_equivalente: Optional[constr(strip_whitespace=True)] = None
+    proveedor_sugerido: Optional[constr(strip_whitespace=True)] = None
+    precio_unitario_estimado: Optional[confloat(ge=0)] = None
+    comentario: Optional[constr(strip_whitespace=True)] = None
+
+
+class TratamientoItemsPayload(BaseModel):
+    items: List[TratamientoItemUpdate]
+
+
+class RechazoTratamiento(BaseModel):
+    motivo: constr(min_length=3, max_length=500, strip_whitespace=True)
+
+
+class TrasladoCreate(BaseModel):
+    solicitud_id: conint(ge=1)
+    item_index: conint(ge=0)
+    material: constr(min_length=1, strip_whitespace=True)
+    um: Optional[constr(strip_whitespace=True)] = None
+    cantidad: confloat(gt=0)
+    origen_centro: constr(min_length=1, strip_whitespace=True)
+    origen_almacen: constr(min_length=1, strip_whitespace=True)
+    origen_lote: Optional[constr(strip_whitespace=True)] = None
+    destino_centro: constr(min_length=1, strip_whitespace=True)
+    destino_almacen: constr(min_length=1, strip_whitespace=True)
+
+
+class TrasladoUpdate(BaseModel):
+    status: Literal["en_transito", "recibido", "cancelado"]
+    referencia: Optional[constr(strip_whitespace=True)] = None
+
+
+class SolpedCreate(BaseModel):
+    solicitud_id: conint(ge=1)
+    item_index: conint(ge=0)
+    material: constr(min_length=1, strip_whitespace=True)
+    um: Optional[constr(strip_whitespace=True)] = None
+    cantidad: confloat(gt=0)
+    precio_unitario_est: Optional[confloat(ge=0)] = None
+    numero: Optional[constr(strip_whitespace=True)] = None
+
+
+class SolpedUpdate(BaseModel):
+    status: Literal["liberada", "rechazada", "cancelada"]
+    numero: Optional[constr(strip_whitespace=True)] = None
+
+
+class PurchaseOrderCreate(BaseModel):
+    solped_id: conint(ge=1)
+    solicitud_id: conint(ge=1)
+    proveedor_email: constr(strip_whitespace=True)
+    proveedor_nombre: constr(min_length=1, strip_whitespace=True)
+    numero: Optional[constr(strip_whitespace=True)] = None
+    subtotal: Optional[confloat(ge=0)] = None
+    moneda: Optional[constr(strip_whitespace=True)] = "USD"
+
+
+class PurchaseOrderUpdate(BaseModel):
+    status: Literal["enviada", "entregada_parcial", "entregada_total", "cerrada", "cancelada"]
+
+
+class NotaCreate(BaseModel):
+    item_index: Optional[conint(ge=0)] = None
+    texto: constr(min_length=1, strip_whitespace=True)

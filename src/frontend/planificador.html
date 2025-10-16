@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>SPM — Planificador</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="styles.css" rel="stylesheet" />
+</head>
+<body class="layout">
+  <header class="topbar">
+    <h1>Planificador</h1>
+    <nav class="nav">
+      <a href="home.html">Home</a>
+      <a href="mis-solicitudes.html">Mis Solicitudes</a>
+      <a class="active" href="planificador.html">Planificador</a>
+      <a href="notificaciones.html">Notificaciones</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>Bandeja</h2>
+      <form id="frmFilters" class="filters">
+        <input id="fCentro" placeholder="Centro" />
+        <input id="fSector" placeholder="Sector" />
+        <input id="fAlmacen" placeholder="Almacén" />
+        <select id="fCriticidad">
+          <option value="">Criticidad (todas)</option>
+          <option value="Alta">Alta</option>
+          <option value="Normal">Normal</option>
+        </select>
+        <input id="fQ" placeholder="Buscar..." />
+        <button class="btn" id="btnBuscar" type="submit">Buscar</button>
+        <button class="btn ghost" id="btnLimpiar" type="button">Limpiar</button>
+      </form>
+
+      <div class="grid-2">
+        <div>
+          <h3>Mis en tratamiento</h3>
+          <table id="tblMias" class="table sortable">
+            <thead>
+              <tr>
+                <th data-sort="number">ID</th>
+                <th>Centro</th>
+                <th>Sector</th>
+                <th>Criticidad</th>
+                <th data-sort="number">Total</th>
+                <th>Actualizado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="pager">
+            <button class="btn" id="pgPrevMias">◀</button>
+            <span id="pgInfoMias"></span>
+            <button class="btn" id="pgNextMias">▶</button>
+          </div>
+        </div>
+
+        <div>
+          <h3>Disponibles para tomar</h3>
+          <table id="tblPend" class="table sortable">
+            <thead>
+              <tr>
+                <th data-sort="number">ID</th>
+                <th>Centro</th>
+                <th>Sector</th>
+                <th>Criticidad</th>
+                <th data-sort="number">Total</th>
+                <th>Actualizado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="pager">
+            <button class="btn" id="pgPrevPend">◀</button>
+            <span id="pgInfoPend"></span>
+            <button class="btn" id="pgNextPend">▶</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Estadísticas</h2>
+      <form id="frmStats" class="filters">
+        <input id="sDesde" type="date" />
+        <input id="sHasta" type="date" />
+        <button class="btn" id="btnStats" type="submit">Actualizar</button>
+      </form>
+      <div id="statsCards" class="cards"></div>
+      <table id="tblTopCentros" class="table">
+        <thead><tr><th>Centro</th><th>Solicitudes</th><th>Monto</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="dlgDetalle" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="modal-content">
+      <h3 id="dlgTitle">Solicitud <span id="detId"></span></h3>
+      <div id="detMeta" class="meta"></div>
+
+      <table id="tblItems" class="table">
+        <thead>
+          <tr>
+            <th>#</th><th>Código</th><th>Descripción</th><th>UM</th>
+            <th>Solicitada</th><th>Precio</th>
+            <th>Decisión</th><th>Aprobada</th><th>Eqv</th><th>Prov.</th><th>$ Est.</th><th>Comentario</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="actions">
+        <button class="btn" id="btnAISuggestions">Sugerencias IA</button>
+      </div>
+
+      <div id="aiPanel" class="ai-panel hide">
+        <h4>Sugerencias IA</h4>
+        <div id="aiSuggestions" class="ai-suggestions"></div>
+      </div>
+
+      <div class="actions end">
+        <button class="btn" id="btnGuardarItems">Guardar cambios</button>
+        <button class="btn success" id="btnFinalizar">Finalizar</button>
+        <button class="btn danger" id="btnRechazar">Rechazar</button>
+        <button class="btn ghost" id="btnLiberar">Liberar</button>
+        <button class="btn" id="btnCerrar">Cerrar</button>
+      </div>
+      <p id="detMsg" class="msg"></p>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

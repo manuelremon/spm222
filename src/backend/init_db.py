@@ -539,6 +539,120 @@ def build_db(force: bool = False) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_archivos_solicitud ON archivos_adjuntos(solicitud_id);
             CREATE INDEX IF NOT EXISTS idx_archivos_usuario ON archivos_adjuntos(usuario_id);
+            CREATE TABLE IF NOT EXISTS solicitud_items_tratamiento(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                item_index INTEGER NOT NULL,
+                decision TEXT NOT NULL,
+                cantidad_aprobada REAL NOT NULL,
+                codigo_equivalente TEXT,
+                proveedor_sugerido TEXT,
+                precio_unitario_estimado REAL,
+                comentario TEXT,
+                updated_by TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(solicitud_id, item_index),
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_items_trat_sol ON solicitud_items_tratamiento(solicitud_id);
+            CREATE TABLE IF NOT EXISTS solicitud_tratamiento_eventos(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                planner_id TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                payload_json TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_trat_eventos_sol ON solicitud_tratamiento_eventos(solicitud_id);
+            CREATE TABLE IF NOT EXISTS solicitud_tratamiento_log(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                item_index INTEGER,
+                actor_id TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                estado TEXT,
+                payload_json TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_trat_log_sol ON solicitud_tratamiento_log(solicitud_id, created_at);
+            CREATE TABLE IF NOT EXISTS traslados(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                item_index INTEGER NOT NULL,
+                material TEXT NOT NULL,
+                um TEXT,
+                cantidad REAL NOT NULL CHECK (cantidad>0),
+                origen_centro TEXT NOT NULL,
+                origen_almacen TEXT NOT NULL,
+                origen_lote TEXT,
+                destino_centro TEXT NOT NULL,
+                destino_almacen TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planificado',
+                referencia TEXT,
+                created_by TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_tras_sol ON traslados(solicitud_id);
+            CREATE TABLE IF NOT EXISTS solpeds(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                item_index INTEGER NOT NULL,
+                material TEXT NOT NULL,
+                um TEXT,
+                cantidad REAL NOT NULL CHECK (cantidad>0),
+                precio_unitario_est REAL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'creada',
+                numero TEXT,
+                created_by TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_solped_sol ON solpeds(solicitud_id);
+            CREATE TABLE IF NOT EXISTS purchase_orders(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solped_id INTEGER NOT NULL,
+                solicitud_id INTEGER NOT NULL,
+                proveedor_email TEXT,
+                proveedor_nombre TEXT,
+                numero TEXT,
+                status TEXT NOT NULL DEFAULT 'emitida',
+                subtotal REAL DEFAULT 0,
+                moneda TEXT DEFAULT 'USD',
+                created_by TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(solped_id) REFERENCES solpeds(id) ON DELETE CASCADE,
+                FOREIGN KEY(solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_po_sol ON purchase_orders(solicitud_id);
+            CREATE TABLE IF NOT EXISTS outbox_emails(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                to_email TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                attachments_json TEXT,
+                status TEXT NOT NULL DEFAULT 'queued',
+                error TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                sent_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS ai_suggestions_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitud_id INTEGER NOT NULL,
+                item_index INTEGER,
+                suggestion_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                accepted INTEGER,
+                actor_id TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_sol ON ai_suggestions_log(solicitud_id);
             """
         )
 

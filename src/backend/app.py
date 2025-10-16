@@ -1,5 +1,6 @@
 from __future__ import annotations
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from flask import Flask, jsonify, request, g
 from flask import current_app
@@ -17,7 +18,9 @@ from backend.routes.presupuestos import bp as presup_bp
 # from backend.routes.chatbot import bp as chatbot_bp  # Temporalmente comentado para testing
 from backend.routes.catalogos import bp as catalogos_bp
 from backend.routes.archivos import bp as archivos_bp
-from backend.init_db import build_db
+from backend.routes.planificador import bp as planner_bp
+from backend.routes.abastecimiento import bp as abastecimiento_bp
+from backend.routes.ai import bp as ai_bp
 
 def _setup_logging(app: Flask) -> None:
     Settings.ensure_dirs()
@@ -39,11 +42,11 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = Settings.MAX_CONTENT_LENGTH
 
     _setup_logging(app)
-    try:
-        build_db(force=False)
-    except Exception as e:
-        app.logger.exception("Failed to initialize database")
-        app.logger.info("Continuing without database initialization")
+    # try:
+    #     build_db(force=False)
+    # except Exception as e:
+    #     app.logger.exception("Failed to initialize database")
+    #     app.logger.info("Continuing without database initialization")
 
     # Enable CORS for /api/* when developing the frontend separately.
     # Set env SPM_CORS_ORIGINS to a comma-separated list, e.g. "http://localhost:8080,http://127.0.0.1:5173"
@@ -74,9 +77,12 @@ def create_app() -> Flask:
     app.register_blueprint(notif_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(presup_bp)
+    app.register_blueprint(planner_bp)
     # app.register_blueprint(chatbot_bp)  # Temporalmente comentado para testing
     app.register_blueprint(catalogos_bp)
     app.register_blueprint(archivos_bp)
+    app.register_blueprint(abastecimiento_bp)
+    app.register_blueprint(ai_bp)
 
     @app.get("/api/health")
     def health():
