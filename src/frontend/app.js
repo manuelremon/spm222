@@ -1,5 +1,14 @@
 // Calcula la URL base del backend. Preferimos hablar con el mismo origen
 // para evitar problemas de CSP/CORS cuando se sirve tras Nginx.
+window.addEventListener('error', (e) => {
+  const box = document.createElement('div');
+  Object.assign(box.style, {
+    position:'fixed', bottom:'0', left:'0', right:'0',
+    background:'#300', color:'#fff', padding:'8px', font:'12px/1.4 monospace', zIndex:99999
+  });
+  box.textContent = 'JS error: ' + (e?.error?.stack || e.message || e.toString());
+  document.body.appendChild(box);
+});
 const API = (function () {
   if (location.protocol === "file:") {
     return "http://127.0.0.1:5001/api";
@@ -2915,10 +2924,42 @@ async function processProfileRequest(requestId, action) {
   }
 }
 
+// ====== SHIMS DE COMPATIBILIDAD (parche rápido) ======
+const fmtMoney   = typeof fmtMoney   === "function" ? fmtMoney   : (v) => formatCurrency(v);
+const fmtDateTime= typeof fmtDateTime=== "function" ? fmtDateTime: (v) => formatDateTime(v);
+const fmtNumber  = typeof fmtNumber  === "function" ? fmtNumber  : (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString("es-AR") : String(v ?? "");
+};
+const esc        = typeof esc        === "function" ? esc        : (s) => escapeHtml(s);
+
+const toastOk    = typeof toastOk    === "function" ? toastOk    : (m) => toast(m, true);
+const toastErr   = typeof toastErr   === "function" ? toastErr   : (e) => {
+  const msg = e?.message || String(e || "Error");
+  toast(msg);
+  console.error(e);
+};
+const toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m);
+
+const skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
+// =====================================================
+
 // Inicializar carga de solicitudes cuando se carga la página de administración
 document.addEventListener("DOMContentLoaded", () => {
   if (window.location.pathname.includes("admin-solicitudes.html")) {
     loadProfileRequests();
+  }
+  if (window.location.pathname.includes("home.html")) {
+    me().then(() => {
+      if (state.me) {
+        const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
+        $("#userName").textContent = userName;
+        initHomeHero(userName);
+      }
+    }).catch(() => {
+      // Not logged in, redirect to index
+      window.location.href = "index.html";
+    });
   }
 });
 
