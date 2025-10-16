@@ -41,6 +41,8 @@ def create_app() -> Flask:
     _setup_logging(app)
     try:
         build_db(force=False)
+    except KeyboardInterrupt:
+        app.logger.warning("Database initialization was interrupted, continuing...")
     except Exception as e:
         app.logger.exception("Failed to initialize database")
         app.logger.info("Continuing without database initialization")
