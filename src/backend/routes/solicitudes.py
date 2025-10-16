@@ -30,6 +30,7 @@ STATUS_FINALIZED = "finalizada"
 STATUS_DRAFT = "draft"
 STATUS_CANCEL_PENDING = "cancelacion_pendiente"
 STATUS_CANCEL_REJECTED = "cancelacion_rechazada"
+STATUS_IN_TREATMENT = "en_tratamiento"
 
 
 def _utcnow_iso() -> str:
@@ -296,6 +297,59 @@ def _ensure_totals(data: dict[str, Any], fallback: float) -> float:
     return data["total_monto"]
 
 
+def _assign_planner_automatically(con, centro: str, sector: str, almacen_virtual: str) -> str | None:
+    """Asigna automáticamente un planificador basado en Centro, Sector y Almacén Virtual."""
+    if not centro or not sector or not almacen_virtual:
+        return None
+    
+    # Buscar asignación específica por centro, sector y almacen
+    row = con.execute(
+        """
+        SELECT p.usuario_id
+          FROM planificador_asignaciones pa
+          JOIN planificadores p ON pa.planificador_id = p.usuario_id
+         WHERE pa.centro = ? AND pa.sector = ? AND pa.almacen_virtual = ?
+         ORDER BY pa.created_at ASC
+         LIMIT 1
+        """,
+        (centro, sector, almacen_virtual),
+    ).fetchone()
+    
+    if row:
+        return row["usuario_id"]
+    
+    # Si no hay asignación específica, buscar por centro y sector
+    row = con.execute(
+        """
+        SELECT p.usuario_id
+          FROM planificador_asignaciones pa
+          JOIN planificadores p ON pa.planificador_id = p.usuario_id
+         WHERE pa.centro = ? AND pa.sector = ? AND pa.almacen_virtual IS NULL
+         ORDER BY pa.created_at ASC
+         LIMIT 1
+        """,
+        (centro, sector),
+    ).fetchone()
+    
+    if row:
+        return row["usuario_id"]
+    
+    # Si no hay asignación por centro y sector, buscar solo por centro
+    row = con.execute(
+        """
+        SELECT p.usuario_id
+          FROM planificador_asignaciones pa
+          JOIN planificadores p ON pa.planificador_id = p.usuario_id
+         WHERE pa.centro = ? AND pa.sector IS NULL AND pa.almacen_virtual IS NULL
+         ORDER BY pa.created_at ASC
+         LIMIT 1
+        """,
+        (centro,),
+    ).fetchone()
+    
+    return row["usuario_id"] if row else None
+
+
 def _serialize_row(row: dict[str, Any], *, detailed: bool) -> dict[str, Any]:
     data = _json_load(row.get("data_json"))
     data.setdefault("items", [])
@@ -440,6 +494,13 @@ def obtener_solicitud(sol_id: int):
             aprobador_user = _fetch_user(con, aprobador_id)
             if aprobador_user:
                 solicitud["aprobador_nombre"] = f"{aprobador_user['nombre']} {aprobador_user['apellido']}"
+        
+        # Agregar nombre del planificador asignado si existe
+        planner_id = solicitud.get("planner_id")
+        if planner_id:
+            planner_user = _fetch_user(con, planner_id)
+            if planner_user:
+                solicitud["planner_nombre"] = f"{planner_user['nombre']} {planner_user['apellido']}"
     return {"ok": True, "solicitud": solicitud}
 
 
@@ -804,8 +865,25 @@ def decidir_solicitud(sol_id: int):
         data["decision"] = decision_payload
         data.pop("cancel_request", None)
 
-        status_final = STATUS_APPROVED if accion == "aprobar" else STATUS_REJECTED
-        message = f"Solicitud #{sol_id} {'aprobada' if accion == 'aprobar' else 'rechazada'}"
+        # Determinar status final y asignar planificador si se aprueba
+        assigned_planner_id = None
+        if accion == "aprobar":
+            # Asignar planificador automáticamente
+            centro = row.get("centro")
+            sector = row.get("sector") 
+            almacen_virtual = row.get("almacen_virtual")
+            assigned_planner_id = _assign_planner_automatically(con, centro, sector, almacen_virtual)
+            
+            if assigned_planner_id:
+                status_final = STATUS_IN_TREATMENT
+                data["assigned_planner"] = assigned_planner_id
+                message = f"Solicitud #{sol_id} aprobada y asignada al planificador"
+            else:
+                status_final = STATUS_APPROVED
+                message = f"Solicitud #{sol_id} aprobada (sin planificador asignado)"
+        else:
+            status_final = STATUS_REJECTED
+            message = f"Solicitud #{sol_id} rechazada"
 
         try:
             data_json = json.dumps(data, ensure_ascii=False)
@@ -813,14 +891,16 @@ def decidir_solicitud(sol_id: int):
                 """
                 UPDATE solicitudes
                    SET status=?, data_json=?, updated_at=CURRENT_TIMESTAMP,
-                       notificado_at=?, aprobador_id=?
+                       notificado_at=?, aprobador_id=?, planner_id=?
                  WHERE id=?
                 """,
-                (status_final, data_json, decision_at, uid.lower(), sol_id),
+                (status_final, data_json, decision_at, uid.lower(), 
+                 assigned_planner_id, sol_id),
             )
             owner = row.get("id_usuario")
-            planner = row.get("planner_id")
-            recipients = {owner, planner}
+            planner = assigned_planner_id  # Usar el planificador asignado, no el anterior
+            assigned_planner = data.get("assigned_planner")
+            recipients = {owner, planner, assigned_planner}
             for dest in recipients:
                 if dest:
                     _create_notification(con, dest, sol_id, message)
@@ -961,9 +1041,9 @@ def export_solicitudes_excel():
             solicitudes = con.execute("""
                 SELECT id, centro, sector, centro_costos, almacen_virtual, criticidad,
                        fecha_necesidad, justificacion, status, created_at, updated_at,
-                       total_estimado, aprobador_id, data_json
+                       total_monto, aprobador_id, data_json
                 FROM solicitudes
-                WHERE owner = ?
+                WHERE id_usuario = ?
                 ORDER BY created_at DESC
             """, (user_id,)).fetchall()
 
@@ -997,6 +1077,10 @@ def export_solicitudes_excel():
             current_row = 2
             for sol in solicitudes:
                 try:
+                    # Asegurarse de que sol sea una tupla/lista
+                    if not isinstance(sol, (tuple, list)):
+                        continue
+                    
                     # Datos principales de la solicitud
                     ws.cell(row=current_row, column=1, value=sol[0])  # ID
                     ws.cell(row=current_row, column=2, value=sol[1] or "")  # Centro
@@ -1013,7 +1097,7 @@ def export_solicitudes_excel():
 
                     # Obtener nombre del aprobador si existe
                     aprobador_name = ""
-                    if sol[12]:  # aprobador_id
+                    if len(sol) > 12 and sol[12]:  # aprobador_id
                         try:
                             aprobador = con.execute("SELECT nombre FROM usuarios WHERE id = ?", (sol[12],)).fetchone()
                             if aprobador:
@@ -1025,7 +1109,7 @@ def export_solicitudes_excel():
                     current_row += 1
 
                     # Agregar items de la solicitud en filas separadas
-                    data_json = sol[13]
+                    data_json = sol[13] if len(sol) > 13 else None
                     if data_json and isinstance(data_json, str):
                         try:
                             data = json.loads(data_json)
@@ -1058,7 +1142,7 @@ def export_solicitudes_excel():
                             pass
                 except Exception as row_error:
                     # Si hay error en una fila específica, continuar con la siguiente
-                    print(f"Error procesando solicitud {sol[0] if sol else 'unknown'}: {row_error}")
+                    print(f"Error procesando solicitud: {row_error}")
                     continue
 
             # Ajustar ancho de columnas
@@ -1108,9 +1192,9 @@ def export_solicitudes_pdf():
             solicitudes = con.execute("""
                 SELECT id, centro, sector, centro_costos, almacen_virtual, criticidad,
                        fecha_necesidad, justificacion, status, created_at, updated_at,
-                       total_estimado, aprobador_id, data_json
+                       total_monto, aprobador_id, data_json
                 FROM solicitudes
-                WHERE owner = ?
+                WHERE id_usuario = ?
                 ORDER BY created_at DESC
             """, (user_id,)).fetchall()
 

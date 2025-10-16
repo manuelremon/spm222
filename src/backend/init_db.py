@@ -109,20 +109,28 @@ def _normalize_catalog_key(value: str) -> str:
 def _load_csv(path: str) -> list[dict[str, str]]:
     if not os.path.exists(path):
         return []
-    with open(path, "r", encoding="utf-8-sig", newline="") as handle:
-        sample = handle.read(4096)
-        handle.seek(0)
-        delimiter = ";" if sample.count(";") > sample.count(",") else ","
-        reader = csv.DictReader(handle, delimiter=delimiter)
-        rows: list[dict[str, str]] = []
-        for raw in reader:
-            normalized: dict[str, str] = {}
-            for key, value in (raw or {}).items():
-                if key is None:
+    try:
+        with open(path, "r", encoding="utf-8-sig", newline="", errors="replace") as handle:
+            sample = handle.read(4096)
+            handle.seek(0)
+            delimiter = ";" if sample.count(";") > sample.count(",") else ","
+            reader = csv.DictReader(handle, delimiter=delimiter)
+            rows: list[dict[str, str]] = []
+            for raw in reader:
+                try:
+                    normalized: dict[str, str] = {}
+                    for key, value in (raw or {}).items():
+                        if key is None:
+                            continue
+                        normalized[_normalize_key(str(key))] = (value or "").strip()
+                    rows.append(normalized)
+                except (KeyboardInterrupt, UnicodeError, UnicodeDecodeError):
+                    # Si hay problemas con una fila específica, omitirla
                     continue
-                normalized[_normalize_key(str(key))] = (value or "").strip()
-            rows.append(normalized)
-        return rows
+            return rows
+    except (UnicodeError, UnicodeDecodeError, KeyboardInterrupt):
+        # Si hay problemas con el archivo completo, devolver lista vacía
+        return []
 
 
 def _to_float(raw: str | None) -> float:
@@ -418,6 +426,26 @@ def build_db(force: bool = False) -> None:
                 FOREIGN KEY(id_usuario) REFERENCES usuarios(id_spm),
                 FOREIGN KEY(planner_id) REFERENCES usuarios(id_spm)
             );
+            CREATE TABLE IF NOT EXISTS planificadores(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_id TEXT NOT NULL UNIQUE,
+                nombre TEXT NOT NULL,
+                activo BOOLEAN DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios(id_spm)
+            );
+            CREATE TABLE IF NOT EXISTS planificador_asignaciones(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                planificador_id TEXT NOT NULL,
+                centro TEXT,
+                sector TEXT,
+                almacen_virtual TEXT,
+                prioridad INTEGER DEFAULT 1,
+                activo BOOLEAN DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(planificador_id) REFERENCES planificadores(usuario_id),
+                UNIQUE(planificador_id, centro, sector, almacen_virtual)
+            );
             CREATE INDEX IF NOT EXISTS idx_mat_desc ON materiales(descripcion);
             CREATE INDEX IF NOT EXISTS idx_sol_user ON solicitudes(id_usuario, created_at);
             CREATE TABLE IF NOT EXISTS notificaciones(
@@ -646,6 +674,43 @@ def build_db(force: bool = False) -> None:
                     """,
                     updates,
                 )
+
+        # Procesar planificadores
+        planificadores_inserts = []
+        asignaciones_inserts = []
+        for row in usuarios_rows:
+            rol = (row.get("rol") or "Solicitante").strip()
+            posicion = (row.get("posicion") or "").strip()
+            # Buscar planificadores por rol O por posición
+            if ("Planificador" in rol or "planificador" in rol.lower() or 
+                "Planificador" in posicion or "planificador" in posicion.lower()):
+                usuario_id = (row.get("id") or row.get("idspm") or "").strip().lower()
+                nombre = f"{(row.get('nombre') or '').strip()} {(row.get('apellido') or '').strip()}".strip()
+                if usuario_id and nombre:
+                    planificadores_inserts.append((usuario_id, nombre))
+
+                    # Crear asignaciones por defecto basadas en centros del planificador
+                    centros_raw = row.get("centro") or row.get("centros") or ""
+                    if centros_raw:
+                        tokens = [token.strip() for token in centros_raw.replace(";", ",").split(",") if token.strip()]
+                        for centro in tokens:
+                            asignaciones_inserts.append((usuario_id, centro, None, None, 1))  # centro, sector, almacen, prioridad
+
+        if planificadores_inserts:
+            con.executemany(
+                "INSERT OR IGNORE INTO planificadores (usuario_id, nombre) VALUES (?, ?)",
+                planificadores_inserts,
+            )
+
+        if asignaciones_inserts:
+            con.executemany(
+                """
+                INSERT OR IGNORE INTO planificador_asignaciones
+                (planificador_id, centro, sector, almacen_virtual, prioridad)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                asignaciones_inserts,
+            )
 
         materiales_rows = _load_csv(materiales_csv)
         if len(materiales_rows) < 10:

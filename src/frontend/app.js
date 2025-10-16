@@ -1344,6 +1344,14 @@ async function loadNotificationsSummary(options = {}) {
     state.notifications.admin = resp.admin || null;
     updateNotificationBadge();
 
+    // Show notification popup for unread notifications
+    if (state.notifications.unread > 0 && !options.markAsRead) {
+      const latestUnread = state.notifications.items.find(item => !item.leido);
+      if (latestUnread) {
+        showNotificationPopup(`Tienes ${state.notifications.unread} notificación(es) pendiente(s)`);
+      }
+    }
+
     if (options.markAsRead) {
       const unreadIds = state.notifications.items
         .filter((item) => !item.leido)
@@ -1367,6 +1375,34 @@ async function loadNotificationsSummary(options = {}) {
   } catch (err) {
     console.error(err);
     return null;
+  }
+}
+
+function showNotificationPopup(message) {
+  const popup = $("#notificationPopup");
+  const textEl = $("#notificationText");
+  const closeBtn = $("#notificationClose");
+  
+  if (!popup || !textEl) return;
+  
+  textEl.textContent = message;
+  popup.classList.remove("hide");
+  
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    hideNotificationPopup();
+  }, 5000);
+  
+  // Close button handler
+  if (closeBtn) {
+    closeBtn.onclick = hideNotificationPopup;
+  }
+}
+
+function hideNotificationPopup() {
+  const popup = $("#notificationPopup");
+  if (popup) {
+    popup.classList.add("hide");
   }
 }
 
@@ -2110,6 +2146,7 @@ function renderSolicitudDetail(detail) {
   const updatedEl = $("#detailUpdated");
   const totalEl = $("#detailTotal");
   const aprobadorEl = $("#detailAprobador");
+  const planificadorEl = $("#detailPlanificador");
   const cancelInfo = $("#detailCancelInfo");
   const itemsTbody = $("#detailItems tbody");
   if (!itemsTbody) return;
@@ -2141,6 +2178,9 @@ function renderSolicitudDetail(detail) {
   totalEl.textContent = formatCurrency(detail.total_monto || 0);
   if (aprobadorEl) {
     aprobadorEl.textContent = detail.aprobador_nombre || "—";
+  }
+  if (planificadorEl) {
+    planificadorEl.textContent = detail.planner_nombre || "—";
   }
 
   const cancelRequest = detail.cancel_request || null;
