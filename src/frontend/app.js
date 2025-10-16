@@ -164,6 +164,7 @@ const dynamicFilterHandlers = new WeakMap();
 let animationObserver = null;
 let effectsEnabled = true;
 let headerNavInitialized = false;
+let authPageInitialized = false;
 
 function markAnimatedElements(scope = document) {
   if (!scope || (scope === document && !document.body)) {
@@ -396,7 +397,9 @@ function initializeHeaderSubmenus(root = document) {
 
 function setupHeaderNav() {
   const nav = document.getElementById("primaryNav");
-  if (!nav) return;
+  if (!nav || headerNavInitialized) return;
+
+  headerNavInitialized = true;
 
   initializeHeaderSubmenus(nav);
 
@@ -1929,6 +1932,90 @@ function help() {
   window.location.href = mailto;
 }
 
+function initAuthPage() {
+  if (authPageInitialized) {
+    return;
+  }
+  const authContainer = document.getElementById("auth");
+  if (!authContainer) {
+    return;
+  }
+
+  authPageInitialized = true;
+
+  const handleLogin = (event) => {
+    event.preventDefault();
+    login();
+  };
+
+  const idInput = document.getElementById("id");
+  const passwordInput = document.getElementById("pw");
+  on(document.getElementById("login"), "click", handleLogin);
+  [idInput, passwordInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          login();
+        }
+      });
+    }
+  });
+
+  on(document.getElementById("register"), "click", (event) => {
+    event.preventDefault();
+    register();
+  });
+
+  on(document.getElementById("recover"), "click", (event) => {
+    event.preventDefault();
+    recover();
+  });
+
+  on(document.getElementById("help"), "click", (event) => {
+    event.preventDefault();
+    help();
+  });
+
+  const registerForm = document.getElementById("registerForm");
+  if (registerForm) {
+    registerForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitRegister();
+    });
+  }
+
+  [document.getElementById("registerModalClose"), document.getElementById("registerModalCancel")]
+    .filter(Boolean)
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        closeRegisterModal();
+      });
+    });
+
+  const registerModal = document.getElementById("registerModal");
+  if (registerModal) {
+    registerModal.addEventListener("click", (event) => {
+      if (event.target === registerModal) {
+        closeRegisterModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      const modal = document.getElementById("registerModal");
+      if (modal && !modal.classList.contains("hide")) {
+        event.preventDefault();
+        closeRegisterModal();
+      }
+    }
+  });
+
+  idInput?.focus();
+}
+
 async function me() {
   try {
     const resp = await api("/me");
@@ -2926,6 +3013,15 @@ async function processProfileRequest(requestId, action) {
 
 // Inicializar carga de solicitudes cuando se carga la página de administración
 document.addEventListener("DOMContentLoaded", () => {
+  finalizePage();
+
+  const rawPage = window.location.pathname.split("/").pop();
+  const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
+
+  if (currentPage === "index.html") {
+    initAuthPage();
+  }
+
   if (window.location.pathname.includes("admin-solicitudes.html")) {
     loadProfileRequests();
   }
