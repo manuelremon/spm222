@@ -2899,3 +2899,87 @@ function requestProfileFieldApproval(field, entry) {
     }
   });
 }
+
+function handleRequestAdditionalCenters() {
+  const identifier = state.me.id || state.me.id_spm || "";
+  const currentCentros = Array.isArray(state.me.centros) ? state.me.centros.join(", ") : "";
+
+  // Mostrar modal para solicitar centros adicionales
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal__content">
+      <div class="modal__header">
+        <h3>Solicitar centros adicionales</h3>
+        <button type="button" class="modal__close" data-action="close">&times;</button>
+      </div>
+      <div class="modal__body">
+        <p>Tu solicitud será enviada al administrador para aprobación.</p>
+        <div class="field">
+          <label for="currentCentros">Centros actuales:</label>
+          <input id="currentCentros" type="text" value="${escapeHtml(currentCentros)}" readonly>
+        </div>
+        <div class="field">
+          <label for="newCentros">Nuevos centros solicitados:</label>
+          <input id="newCentros" type="text" placeholder="Ej. Centro Norte, Centro Sur" required>
+        </div>
+        <div class="field">
+          <label for="justification">Justificación:</label>
+          <textarea id="justification" placeholder="Explica por qué necesitas acceso a estos centros" required></textarea>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn sec" data-action="cancel">Cancelar</button>
+        <button type="button" class="btn pri" data-action="submit">Enviar solicitud</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modal.remove();
+  };
+
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal || ev.target.dataset.action === "close" || ev.target.dataset.action === "cancel") {
+      closeModal();
+    }
+  });
+
+  modal.querySelector('[data-action="submit"]').addEventListener("click", async () => {
+    const newCentros = modal.querySelector("#newCentros").value.trim();
+    const justification = modal.querySelector("#justification").value.trim();
+
+    if (!newCentros || !justification) {
+      toast("Por favor completa todos los campos");
+      return;
+    }
+
+    try {
+      const payload = {
+        field: "centros",
+        current_value: currentCentros,
+        new_value: newCentros,
+        justification: justification,
+        user_id: identifier,
+        field_label: "Centros habilitados"
+      };
+
+      const response = await api("/user/profile-request", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        toast("Solicitud enviada al administrador para aprobación");
+        closeModal();
+      } else {
+        throw new Error(response.error?.message || "Error al enviar la solicitud");
+      }
+    } catch (error) {
+      console.error(error);
+      toast(error.message || "Error al enviar la solicitud");
+    }
+  });
+}

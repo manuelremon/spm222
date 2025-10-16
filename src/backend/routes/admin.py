@@ -2,6 +2,7 @@ from __future__ import annotations
 import csv
 import os
 import sqlite3
+import json
 from flask import Blueprint, request
 from typing import Any, Dict, List, Optional
 from ..config import Settings
@@ -714,3 +715,189 @@ def administrar_almacenes():
             """
         ).fetchall()
     return {"ok": True, "items": rows}
+
+
+@bp.route("/user/profile-request", methods=["POST", "OPTIONS"])
+def crear_solicitud_perfil():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    payload = request.get_json(force=True, silent=False) or {}
+    user_id = payload.get("user_id")
+    field = payload.get("field")
+    current_value = payload.get("current_value", "")
+    new_value = payload.get("new_value")
+    justification = payload.get("justification")
+    field_label = payload.get("field_label", field)
+
+    if not all([user_id, field, new_value, justification]):
+        return {"ok": False, "error": {"code": "INVALID", "message": "Faltan campos requeridos"}}, 400
+
+    # Validar que el campo requiere aprobación
+    approval_required_fields = {"sector", "posicion", "centros"}
+    if field not in approval_required_fields:
+        return {"ok": False, "error": {"code": "INVALID", "message": "Este campo no requiere aprobación"}}, 400
+
+    with get_connection() as con:
+        # Verificar que el usuario existe
+        user_row = con.execute(
+            "SELECT id_spm FROM usuarios WHERE lower(id_spm)=?",
+            (user_id.lower(),)
+        ).fetchone()
+        if not user_row:
+            return {"ok": False, "error": {"code": "NOT_FOUND", "message": "Usuario no encontrado"}}, 404
+
+        # Crear la solicitud de perfil
+        payload_data = {
+            "field": field,
+            "current_value": current_value,
+            "new_value": new_value,
+            "justification": justification,
+            "field_label": field_label
+        }
+
+        con.execute(
+            """
+            INSERT INTO user_profile_requests (usuario_id, tipo, payload, estado)
+            VALUES (?, ?, ?, 'pendiente')
+            """,
+            (user_id, field, json.dumps(payload_data))
+        )
+
+        con.commit()
+
+    return {"ok": True, "message": "Solicitud creada exitosamente"}
+
+
+@bp.get("/profile-requests")
+def listar_solicitudes_perfil():
+    with get_connection() as con:
+        _, error = _require_admin(con)
+        if error:
+            return error["body"], error["status"]
+
+        rows = con.execute(
+            """
+            SELECT upr.id,
+                   upr.usuario_id,
+                   upr.tipo as field,
+                   upr.payload,
+                   upr.estado,
+                   upr.created_at,
+                   upr.updated_at,
+                   COALESCE(u.nombre || ' ' || u.apellido, u.nombre, upr.usuario_id) AS solicitante,
+                   u.mail
+              FROM user_profile_requests upr
+              LEFT JOIN usuarios u ON lower(u.id_spm) = lower(upr.usuario_id)
+             WHERE upr.estado = 'pendiente'
+             ORDER BY datetime(upr.created_at) DESC, upr.id DESC
+            """
+        ).fetchall()
+
+        items = []
+        for row in rows:
+            payload_raw = row.get("payload") or "{}"
+            try:
+                payload = json.loads(payload_raw)
+            except json.JSONDecodeError:
+                payload = {}
+
+            items.append({
+                "id": row["id"],
+                "usuario_id": row["usuario_id"],
+                "solicitante": row["solicitante"],
+                "mail": row.get("mail"),
+                "field": row["field"],
+                "field_label": payload.get("field_label", row["field"]),
+                "current_value": payload.get("current_value", ""),
+                "new_value": payload.get("new_value", ""),
+                "justification": payload.get("justification", ""),
+                "estado": row["estado"],
+                "created_at": row["created_at"],
+                "updated_at": row.get("updated_at")
+            })
+
+    return {"ok": True, "items": items}
+
+
+@bp.route("/profile-requests/<int:request_id>", methods=["POST", "OPTIONS"])
+def procesar_solicitud_perfil(request_id):
+    if request.method == "OPTIONS":
+        return "", 204
+
+    payload = request.get_json(force=True, silent=False) or {}
+    action = payload.get("action")  # "approve" o "reject"
+
+    if action not in ["approve", "reject"]:
+        return {"ok": False, "error": {"code": "INVALID", "message": "Acción inválida"}}, 400
+
+    with get_connection() as con:
+        _, error = _require_admin(con)
+        if error:
+            return error["body"], error["status"]
+
+        # Obtener la solicitud
+        request_row = con.execute(
+            "SELECT * FROM user_profile_requests WHERE id = ? AND estado = 'pendiente'",
+            (request_id,)
+        ).fetchone()
+
+        if not request_row:
+            return {"ok": False, "error": {"code": "NOT_FOUND", "message": "Solicitud no encontrada"}}, 404
+
+        usuario_id = request_row["usuario_id"]
+        request_payload = json.loads(request_row["payload"] or "{}")
+        field = request_payload.get("field")
+        new_value = request_payload.get("new_value")
+
+        if action == "approve":
+            # Actualizar el campo del usuario
+            field_mapping = {
+                "sector": "sector",
+                "posicion": "posicion",
+                "centros": "centros"
+            }
+
+            if field in field_mapping:
+                db_field = field_mapping[field]
+                if field == "centros":
+                    # Para centros, agregar a los existentes
+                    current_centros_row = con.execute(
+                        "SELECT centros FROM usuarios WHERE lower(id_spm) = ?",
+                        (usuario_id.lower(),)
+                    ).fetchone()
+                    current_centros = current_centros_row.get("centros") or ""
+                    updated_centros = current_centros
+                    if current_centros:
+                        updated_centros += "," + new_value
+                    else:
+                        updated_centros = new_value
+                    con.execute(
+                        f"UPDATE usuarios SET {db_field} = ? WHERE lower(id_spm) = ?",
+                        (updated_centros, usuario_id.lower())
+                    )
+                else:
+                    con.execute(
+                        f"UPDATE usuarios SET {db_field} = ? WHERE lower(id_spm) = ?",
+                        (new_value, usuario_id.lower())
+                    )
+
+            # Marcar como aprobada
+            con.execute(
+                "UPDATE user_profile_requests SET estado = 'aprobada', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (request_id,)
+            )
+
+            message = "Solicitud aprobada y perfil actualizado"
+        else:
+            # Marcar como rechazada
+            con.execute(
+                "UPDATE user_profile_requests SET estado = 'rechazada', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (request_id,)
+            )
+
+            message = "Solicitud rechazada"
+
+        con.commit()
+
+    return {"ok": True, "message": message}
