@@ -2926,20 +2926,31 @@ async function processProfileRequest(requestId, action) {
 
 // Inicializar carga de solicitudes cuando se carga la página de administración
 document.addEventListener("DOMContentLoaded", () => {
-  if (window.location.pathname.includes("admin-solicitudes.html")) {
-    loadProfileRequests();
+  // Inicialización robusta de páginas
+  const rawPage = window.location.pathname.split("/").pop();
+  const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
+
+  if (currentPage === "index.html") {
+    initAuthPage();
   }
-  if (window.location.pathname.includes("home.html")) {
+
+  if (currentPage === "home.html") {
     me().then(() => {
       if (state.me) {
         const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
-        $("#userName").textContent = userName;
+        const userNameNode = document.getElementById("userName");
+        if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
+      } else {
+        window.location.href = "index.html";
       }
     }).catch(() => {
-      // Not logged in, redirect to index
       window.location.href = "index.html";
     });
+  }
+
+  if (currentPage === "admin-solicitudes.html") {
+    loadProfileRequests();
   }
 });
 
