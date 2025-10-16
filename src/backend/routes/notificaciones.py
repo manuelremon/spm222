@@ -181,11 +181,11 @@ def listar_notificaciones():
 
 @bp.route(
     "/notificaciones/centros/<int:request_id>/decision",
-    methods=["POST", "PUT", "OPTIONS"],
+    methods=["POST", "OPTIONS"],
 )
 @bp.route(
     "/notificaciones/centros/<int:request_id>/decision/",
-    methods=["POST", "PUT", "OPTIONS"],
+    methods=["POST", "OPTIONS"],
 )
 def decidir_solicitud_centros(request_id: int):
     if request.method == "OPTIONS":
