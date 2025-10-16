@@ -16,8 +16,10 @@ COOKIE_NAME = "spm_token"
 def _cookie_args():
     return dict(httponly=True, samesite="Lax", secure=False)
 
-@bp.post("/login")
+@bp.route("/login", methods=["POST", "OPTIONS"])
 def login():
+    if request.method == "OPTIONS":
+        return "", 204
     data = LoginRequest(**request.get_json(force=True))
     with get_connection() as con:
         # permitimos login por id_spm o por mail
@@ -57,14 +59,18 @@ def login():
         resp.set_cookie(COOKIE_NAME, token, **_cookie_args())
         return resp
 
-@bp.post("/logout")
+@bp.route("/logout", methods=["POST", "OPTIONS"])
 def logout():
+    if request.method == "OPTIONS":
+        return "", 204
     resp = make_response({"ok": True})
     resp.delete_cookie(COOKIE_NAME)
     return resp
 
-@bp.post("/register")
+@bp.route("/register", methods=["POST", "OPTIONS"])
 def register():
+    if request.method == "OPTIONS":
+        return "", 204
     payload = RegisterRequest(**request.get_json(force=True))
     with get_connection() as con:
         try:
@@ -145,8 +151,10 @@ def _require_user_id():
     return data.get("sub"), None
 
 
-@bp.post("/me/telefono")
+@bp.route("/me/telefono", methods=["POST", "OPTIONS"])
 def update_phone():
+    if request.method == "OPTIONS":
+        return "", 204
     uid, error = _require_user_id()
     if error:
         code, msg, status = error
@@ -158,8 +166,10 @@ def update_phone():
     return {"ok": True, "telefono": payload.telefono}
 
 
-@bp.post("/me/centros/solicitud")
+@bp.route("/me/centros/solicitud", methods=["POST", "OPTIONS"])
 def request_additional_centers():
+    if request.method == "OPTIONS":
+        return "", 204
     uid, error = _require_user_id()
     if error:
         code, msg, status = error

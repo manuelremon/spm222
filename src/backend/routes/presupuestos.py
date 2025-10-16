@@ -278,8 +278,10 @@ def obtener_presupuestos_propios():
     return response
 
 
-@bp.post("/presupuestos/incorporaciones")
+@bp.route("/presupuestos/incorporaciones", methods=["POST", "OPTIONS"])
 def crear_incorporacion_presupuesto():
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401
@@ -316,8 +318,10 @@ def crear_incorporacion_presupuesto():
     return {"ok": True, "incorporacion": _serialize_increase(row)}, 201
 
 
-@bp.post("/presupuestos/incorporaciones/<int:inc_id>/resolver")
+@bp.route("/presupuestos/incorporaciones/<int:inc_id>/resolver", methods=["POST", "OPTIONS"])
 def resolver_incorporacion_presupuesto(inc_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401

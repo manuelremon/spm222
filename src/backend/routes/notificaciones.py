@@ -314,8 +314,10 @@ def decidir_solicitud_centros(request_id: int):
     }
 
 
-@bp.post("/notificaciones/marcar")
+@bp.route("/notificaciones/marcar", methods=["POST", "OPTIONS"])
 def marcar_notificaciones():
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401

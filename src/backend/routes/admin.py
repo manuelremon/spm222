@@ -330,8 +330,10 @@ def administrar_usuarios():
     return {"ok": True, "total": total, "items": items}
 
 
-@bp.put("/usuarios/<user_id>")
+@bp.route("/usuarios/<user_id>", methods=["PUT", "OPTIONS"])
 def actualizar_usuario(user_id: str):
+    if request.method == "OPTIONS":
+        return "", 204
     payload = request.get_json(force=True, silent=False) or {}
     with get_connection() as con:
         _, error = _require_admin(con)
@@ -478,8 +480,10 @@ def administrar_materiales():
     return {"ok": True, "total": total, "items": rows}
 
 
-@bp.put("/materiales/<codigo>")
+@bp.route("/materiales/<codigo>", methods=["PUT", "OPTIONS"])
 def actualizar_material(codigo: str):
+    if request.method == "OPTIONS":
+        return "", 204
     payload = request.get_json(force=True, silent=False) or {}
     descripcion = (payload.get("descripcion") or "").strip()
     descripcion_larga = payload.get("descripcion_larga") or None
@@ -578,8 +582,10 @@ def obtener_configuracion_recurso(resource: str):
     return {"ok": True, "items": items}
 
 
-@bp.post("/config/<resource>")
+@bp.route("/config/<resource>", methods=["POST", "OPTIONS"])
 def crear_configuracion(resource: str):
+    if request.method == "OPTIONS":
+        return "", 204
     meta = _catalog_meta(resource)
     if not meta:
         return {"ok": False, "error": {"code": "UNKNOWN", "message": "Recurso desconocido"}}, 404
@@ -619,8 +625,10 @@ def crear_configuracion(resource: str):
     return {"ok": True, "item": _row_to_catalog_item(meta, row)}
 
 
-@bp.put("/config/<resource>/<int:item_id>")
+@bp.route("/config/<resource>/<int:item_id>", methods=["PUT", "OPTIONS"])
 def actualizar_configuracion(resource: str, item_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     meta = _catalog_meta(resource)
     if not meta:
         return {"ok": False, "error": {"code": "UNKNOWN", "message": "Recurso desconocido"}}, 404

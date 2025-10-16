@@ -2109,7 +2109,8 @@ function renderSolicitudDetail(detail) {
   const createdEl = $("#detailCreated");
   const updatedEl = $("#detailUpdated");
   const totalEl = $("#detailTotal");
-    const cancelInfo = $("#detailCancelInfo"); // This line is unchanged
+  const aprobadorEl = $("#detailAprobador");
+  const cancelInfo = $("#detailCancelInfo");
   const itemsTbody = $("#detailItems tbody");
   if (!itemsTbody) return;
 
@@ -2138,6 +2139,9 @@ function renderSolicitudDetail(detail) {
   createdEl.textContent = detail.created_at ? new Date(detail.created_at).toLocaleString() : "—";
   updatedEl.textContent = detail.updated_at ? new Date(detail.updated_at).toLocaleString() : "—";
   totalEl.textContent = formatCurrency(detail.total_monto || 0);
+  if (aprobadorEl) {
+    aprobadorEl.textContent = detail.aprobador_nombre || "—";
+  }
 
   const cancelRequest = detail.cancel_request || null;
   cancelInfo.classList.add("hide");

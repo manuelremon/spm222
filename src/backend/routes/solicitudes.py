@@ -97,13 +97,41 @@ def _has_role(user: dict[str, Any] | None, *needles: str) -> bool:
     return False
 
 
-def _resolve_approver(user: dict[str, Any] | None) -> str | None:
+def _resolve_approver(con, user: dict[str, Any] | None, total_monto: float = 0.0) -> str | None:
     if not user:
         return None
+    
+    # Determinar el aprobador basado en el monto total
+    if total_monto <= 20000.0:
+        # Jefe desde USD 0.01 hasta USD 20000
+        approver_field = "jefe"
+    elif total_monto <= 100000.0:
+        # Gerente1 desde USD 20000.01 hasta USD 100000
+        approver_field = "gerente1"
+    else:
+        # Gerente2 desde USD 100000.01 en adelante
+        approver_field = "gerente2"
+    
+    approver_email = _coerce_str(user.get(approver_field))
+    if approver_email:
+        # Buscar el id_spm del usuario con este email
+        approver_user = con.execute(
+            "SELECT id_spm FROM usuarios WHERE lower(mail) = ?",
+            (approver_email.lower(),)
+        ).fetchone()
+        if approver_user:
+            return approver_user["id_spm"]
+    
+    # Fallback: buscar en otros campos si el campo específico no está disponible
     for field in ("jefe", "gerente1", "gerente2"):
-        value = _coerce_str(user.get(field))
-        if value:
-            return value.lower()
+        approver_email = _coerce_str(user.get(field))
+        if approver_email:
+            approver_user = con.execute(
+                "SELECT id_spm FROM usuarios WHERE lower(mail) = ?",
+                (approver_email.lower(),)
+            ).fetchone()
+            if approver_user:
+                return approver_user["id_spm"]
     return None
 
 
@@ -397,7 +425,14 @@ def obtener_solicitud(sol_id: int):
         user = _fetch_user(con, uid)
         if not _can_view(user, row):
             return _json_error("FORBIDDEN", "No tienes acceso a esta solicitud", 403)
-    return {"ok": True, "solicitud": _serialize_row(row, detailed=True)}
+        solicitud = _serialize_row(row, detailed=True)
+        # Agregar nombre del aprobador si existe
+        aprobador_id = solicitud.get("aprobador_id")
+        if aprobador_id:
+            aprobador_user = _fetch_user(con, aprobador_id)
+            if aprobador_user:
+                solicitud["aprobador_nombre"] = f"{aprobador_user['nombre']} {aprobador_user['apellido']}"
+    return {"ok": True, "solicitud": solicitud}
 
 
 def _sync_columns_from_payload(payload: dict[str, Any]) -> tuple[str, str, str, str, str, str, str]:
@@ -412,8 +447,10 @@ def _sync_columns_from_payload(payload: dict[str, Any]) -> tuple[str, str, str, 
     )
 
 
-@bp.post("/solicitudes/drafts")
+@bp.route("/solicitudes/drafts", methods=["POST", "OPTIONS"])
 def crear_borrador():
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -427,7 +464,7 @@ def crear_borrador():
         user = _fetch_user(con, uid)
         if not user:
             return _json_error("NOUSER", "Usuario no encontrado", 404)
-        approver = _ensure_user_exists(con, _resolve_approver(user))
+        approver = _ensure_user_exists(con, _resolve_approver(con, user, 0.0))
         planner = _ensure_user_exists(con, _resolve_planner(user))
         draft_payload = {
             **draft_data,
@@ -476,8 +513,10 @@ def crear_borrador():
     return {"ok": True, "id": sol_id, "status": STATUS_DRAFT}
 
 
-@bp.patch("/solicitudes/<int:sol_id>/draft")
+@bp.route("/solicitudes/<int:sol_id>/draft", methods=["PATCH", "OPTIONS"])
 def actualizar_borrador(sol_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -502,6 +541,16 @@ def actualizar_borrador(sol_id: int):
         if draft_data.get("items"):
             existing_data["items"] = draft_data["items"]
             existing_data["total_monto"] = draft_data["total_monto"]
+        
+        # Recalcular aprobador si cambió el monto
+        new_total = existing_data.get("total_monto", 0.0)
+        old_total = row.get("total_monto", 0.0)
+        if abs(new_total - old_total) > 0.01:  # Pequeña tolerancia para flotantes
+            user = _fetch_user(con, uid)
+            new_approver = _ensure_user_exists(con, _resolve_approver(con, user, new_total))
+            if new_approver != row.get("aprobador_id"):
+                existing_data["aprobador_id"] = new_approver
+        
         centro, sector, justificacion, centro_costos, almacen_virtual, criticidad, fecha_necesidad = _sync_columns_from_payload(draft_data)
         data_json = json.dumps(existing_data, ensure_ascii=False)
         try:
@@ -509,7 +558,7 @@ def actualizar_borrador(sol_id: int):
                 """
                 UPDATE solicitudes
                    SET centro=?, sector=?, justificacion=?, centro_costos=?, almacen_virtual=?,
-                       data_json=?, total_monto=?, criticidad=?, fecha_necesidad=?,
+                       data_json=?, total_monto=?, aprobador_id=?, criticidad=?, fecha_necesidad=?,
                        updated_at=CURRENT_TIMESTAMP
                  WHERE id=?
                 """,
@@ -521,6 +570,7 @@ def actualizar_borrador(sol_id: int):
                     almacen_virtual,
                     data_json,
                     existing_data.get("total_monto", row.get("total_monto")),
+                    existing_data.get("aprobador_id", row.get("aprobador_id")),
                     criticidad,
                     fecha_necesidad,
                     sol_id,
@@ -536,7 +586,7 @@ def actualizar_borrador(sol_id: int):
 def _finalizar_solicitud(con, row: dict[str, Any], final_data: dict[str, Any], user: dict[str, Any] | None, *, is_new: bool) -> tuple[int, dict[str, Any]]:
     approver = _ensure_user_exists(
         con,
-        final_data.get("aprobador_id") or _resolve_approver(user),
+        final_data.get("aprobador_id") or _resolve_approver(con, user, final_data.get("total_monto", 0.0)),
     )
     planner = _ensure_user_exists(
         con,
@@ -613,8 +663,10 @@ def _finalizar_solicitud(con, row: dict[str, Any], final_data: dict[str, Any], u
     return sol_id, final_payload
 
 
-@bp.put("/solicitudes/<int:sol_id>")
+@bp.route("/solicitudes/<int:sol_id>", methods=["PUT", "OPTIONS"])
 def finalizar_solicitud(sol_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -644,8 +696,10 @@ def finalizar_solicitud(sol_id: int):
     return {"ok": True, "id": sol_id, "status": STATUS_PENDING, "total_monto": final_payload.get("total_monto")}
 
 
-@bp.post("/solicitudes")
+@bp.route("/solicitudes", methods=["POST", "OPTIONS"])
 def crear_solicitud():
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -701,8 +755,10 @@ def _create_cancel_request(row: dict[str, Any], reason: str | None, uid: str) ->
     return cancel_request
 
 
-@bp.post("/solicitudes/<int:sol_id>/decidir")
+@bp.route("/solicitudes/<int:sol_id>/decidir", methods=["POST", "OPTIONS"])
 def decidir_solicitud(sol_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -768,8 +824,10 @@ def decidir_solicitud(sol_id: int):
     return {"ok": True, "status": status_final, "decision": decision_payload}
 
 
-@bp.patch("/solicitudes/<int:sol_id>/cancel")
+@bp.route("/solicitudes/<int:sol_id>/cancel", methods=["PATCH", "OPTIONS"])
 def cancelar_solicitud(sol_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)
@@ -814,8 +872,10 @@ def cancelar_solicitud(sol_id: int):
     return {"ok": True, "status": STATUS_CANCEL_PENDING}
 
 
-@bp.post("/solicitudes/<int:sol_id>/decidir_cancelacion")
+@bp.route("/solicitudes/<int:sol_id>/decidir_cancelacion", methods=["POST", "OPTIONS"])
 def decidir_cancelacion(sol_id: int):
+    if request.method == "OPTIONS":
+        return "", 204
     uid = _require_auth()
     if not uid:
         return _json_error("NOAUTH", "No autenticado", 401)

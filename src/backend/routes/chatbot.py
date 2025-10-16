@@ -62,8 +62,10 @@ def _resolve_ollama_model() -> str:
     return model
 
 
-@bp.post("/chatbot")
+@bp.route("/chatbot", methods=["POST", "OPTIONS"])
 def invoke_chatbot():
+    if request.method == "OPTIONS":
+        return "", 204
     user_sub = _require_user()
     if not user_sub:
         return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401
