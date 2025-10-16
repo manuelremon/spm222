@@ -62,7 +62,7 @@
           <div>
             <p class="overline">Administración</p>
             <h1>Configuración general</h1>
-            <p class="muted">Gestioná los catálogos maestros utilizados en solicitudes, usuarios y presupuesto.</p>
+            <p class="muted"></p>
           </div>
           <button class="btn sec" type="button" id="adminConfigRefreshAll">Actualizar todo</button>
         </div>
@@ -70,7 +70,7 @@
           <header class="section-head admin-config-head">
             <div>
               <h2>Centros logísticos</h2>
-              <p class="helper">Códigos y descripciones utilizadas en las solicitudes.</p>
+              <p class="helper"></p>
             </div>
             <div class="config-actions">
               <button class="btn sec" type="button" data-config-refresh="centros">Actualizar</button>
@@ -181,8 +181,8 @@
         <section class="pane admin-config-block" data-config-section="roles">
           <header class="section-head admin-config-head">
             <div>
-              <h2>Roles corporativos</h2>
-              <p class="helper">Roles disponibles para administrar permisos y aprobaciones.</p>
+              <h2>Roles</h2>
+              <p class="helper"></p>
             </div>
             <div class="config-actions">
               <button class="btn sec" type="button" data-config-refresh="roles">Actualizar</button>
@@ -194,8 +194,15 @@
               <input id="configRolesNombre" name="nombre" placeholder="Ej. Administrador" required>
             </div>
             <div class="field">
-              <label for="configRolesDescripcion">Descripción</label>
-              <input id="configRolesDescripcion" name="descripcion" placeholder="Describe el alcance del rol">
+              <label for="configRolesAlcance">Alcance del rol</label>
+              <select id="configRolesAlcance" name="descripcion" required>
+                <option value="">Seleccionar alcance</option>
+                <option value="Global">Global</option>
+                <option value="Regional">Regional</option>
+                <option value="Local">Local</option>
+                <option value="Departamental">Departamental</option>
+                <option value="Individual">Individual</option>
+              </select>
             </div>
             <div class="field">
               <label class="toggle">
@@ -213,7 +220,7 @@
               <thead>
                 <tr>
                   <th>Nombre</th>
-                  <th>Descripción</th>
+                  <th>Alcance</th>
                   <th>Estado</th>
                   <th></th>
                 </tr>
@@ -228,7 +235,7 @@
           <header class="section-head admin-config-head">
             <div>
               <h2>Puestos y posiciones</h2>
-              <p class="helper">Catálogo de puestos para asignar a los usuarios.</p>
+              <p class="helper"></p>
             </div>
             <div class="config-actions">
               <button class="btn sec" type="button" data-config-refresh="puestos">Actualizar</button>
@@ -240,8 +247,18 @@
               <input id="configPuestosNombre" name="nombre" placeholder="Ej. Gerente Regional" required>
             </div>
             <div class="field">
-              <label for="configPuestosDescripcion">Descripción</label>
-              <input id="configPuestosDescripcion" name="descripcion" placeholder="Funciones principales (opcional)">
+              <label for="configPuestosFunciones">Funciones principales</label>
+              <select id="configPuestosFunciones" name="descripcion" required>
+                <option value="">Seleccionar función</option>
+                <option value="Gerencial">Gerencial</option>
+                <option value="Operativo">Operativo</option>
+                <option value="Técnico">Técnico</option>
+                <option value="Administrativo">Administrativo</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Logístico">Logístico</option>
+                <option value="Mantenimiento">Mantenimiento</option>
+                <option value="Producción">Producción</option>
+              </select>
             </div>
             <div class="field">
               <label class="toggle">
@@ -259,7 +276,7 @@
               <thead>
                 <tr>
                   <th>Nombre</th>
-                  <th>Descripción</th>
+                  <th>Funciones principales</th>
                   <th>Estado</th>
                   <th></th>
                 </tr>
@@ -273,8 +290,8 @@
         <section class="pane admin-config-block" data-config-section="sectores">
           <header class="section-head admin-config-head">
             <div>
-              <h2>Sectores operativos</h2>
-              <p class="helper">Lista de sectores disponible para usuarios y solicitudes.</p>
+              <h2>Sectores</h2>
+              <p class="helper"></p>
             </div>
             <div class="config-actions">
               <button class="btn sec" type="button" data-config-refresh="sectores">Actualizar</button>
