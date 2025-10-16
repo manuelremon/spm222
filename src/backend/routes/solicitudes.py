@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request, send_file
 from ..db import get_connection
 from ..schemas import BudgetIncreaseDecision, SolicitudCreate, SolicitudDraft
 from ..security import verify_access_token
+from ..roles import has_role
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -94,16 +95,6 @@ def _ensure_user_exists(con, uid: str | None) -> str | None:
         (normalized,),
     ).fetchone()
     return normalized if row else None
-
-
-def _has_role(user: dict[str, Any] | None, *needles: str) -> bool:
-    if not user:
-        return False
-    role = _coerce_str(user.get("rol")).lower()
-    for needle in needles:
-        if needle.lower() in role:
-            return True
-    return False
 
 
 def _resolve_approver(con, user: dict[str, Any] | None, total_monto: float = 0.0) -> str | None:
@@ -421,7 +412,7 @@ def _can_view(user: dict[str, Any] | None, row: dict[str, Any]) -> bool:
     planner = _coerce_str(row.get("planner_id")).lower()
     if uid and planner and uid.lower() == planner:
         return True
-    if _has_role(user, "admin", "administrador", "planner", "planificador"):
+    if has_role(user, "planner", "planificador", "admin", "administrador"):
         return True
     return False
 
@@ -436,7 +427,7 @@ def _can_decide_cancel(user: dict[str, Any] | None, row: dict[str, Any]) -> bool
     planner = _coerce_str(row.get("planner_id")).lower()
     if uid == approver or uid == planner:
         return True
-    return _has_role(user, "admin", "administrador", "planner", "planificador")
+    return has_role(user, "planner", "planificador", "admin", "administrador")
 
 
 def _can_resolve(user: dict[str, Any] | None, row: dict[str, Any]) -> bool:
@@ -449,7 +440,7 @@ def _can_resolve(user: dict[str, Any] | None, row: dict[str, Any]) -> bool:
     planner = _coerce_str(row.get("planner_id")).lower()
     if uid == approver or uid == planner:
         return True
-    return _has_role(user, "admin", "administrador", "aprobador", "planner", "planificador")
+    return has_role(user, "planner", "planificador", "admin", "administrador", "aprobador")
 
 
 @bp.get("/solicitudes")
