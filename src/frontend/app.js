@@ -2939,32 +2939,32 @@ function initAuthPage() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Inicialización robusta de páginas
   const rawPage = window.location.pathname.split("/").pop();
   const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
 
-  const init = () => {
-    if (currentPage === "index.html") {
-      initAuthPage();
-    }
+  if (currentPage === "index.html") {
+    initAuthPage();
+  } else {
+    me().then(() => {
+      if (!state.me) {
+        window.location.href = "index.html";
+        return;
+      }
 
-    if (currentPage === "home.html") {
-      if (state.me) {
+      if (currentPage === "home.html") {
         const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
         const userNameNode = document.getElementById("userName");
         if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
-      } else {
-        window.location.href = "index.html";
       }
-    }
 
-    if (currentPage === "admin-solicitudes.html") {
-      loadProfileRequests();
-    }
-  };
-
-  me().then(init).catch(init);
+      if (currentPage === "admin-solicitudes.html") {
+        loadProfileRequests();
+      }
+    }).catch(() => {
+      window.location.href = "index.html";
+    });
+  }
 });
 
 // Controlar visibilidad del menú de administración
