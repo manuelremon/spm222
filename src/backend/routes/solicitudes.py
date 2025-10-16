@@ -498,9 +498,13 @@ def obtener_solicitud(sol_id: int):
         # Agregar nombre del planificador asignado si existe
         planner_id = solicitud.get("planner_id")
         if planner_id:
-            planner_user = _fetch_user(con, planner_id)
-            if planner_user:
-                solicitud["planner_nombre"] = f"{planner_user['nombre']} {planner_user['apellido']}"
+            # Buscar el nombre en la tabla planificadores
+            planner_row = con.execute(
+                "SELECT nombre FROM planificadores WHERE usuario_id = ?",
+                (planner_id,)
+            ).fetchone()
+            if planner_row:
+                solicitud["planner_nombre"] = planner_row["nombre"]
     return {"ok": True, "solicitud": solicitud}
 
 
