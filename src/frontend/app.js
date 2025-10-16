@@ -1900,6 +1900,52 @@ function help() {
   window.location.href = mailto;
 }
 
+function initAuthPage() {
+  const loginBtn = $("#login");
+  const registerBtn = $("#register");
+  const recoverBtn = $("#recover");
+  const helpBtn = $("#help");
+  const idInput = $("#id");
+  const pwInput = $("#pw");
+
+  if (loginBtn) {
+    on(loginBtn, "click", (event) => {
+      event.preventDefault();
+      login();
+    });
+  }
+  if (registerBtn) {
+    on(registerBtn, "click", (event) => {
+      event.preventDefault();
+      register();
+    });
+  }
+  if (recoverBtn) {
+    on(recoverBtn, "click", (event) => {
+      event.preventDefault();
+      recover();
+    });
+  }
+  if (helpBtn) {
+    on(helpBtn, "click", (event) => {
+      event.preventDefault();
+      help();
+    });
+  }
+  const submitOnEnter = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      login();
+    }
+  };
+  if (idInput) {
+    on(idInput, "keyup", submitOnEnter);
+  }
+  if (pwInput) {
+    on(pwInput, "keyup", submitOnEnter);
+  }
+}
+
 async function me() {
   try {
     const resp = await api("/me");
@@ -3074,7 +3120,12 @@ function initReportesPage() {
 
 // Inicialización de páginas específicas
 document.addEventListener("DOMContentLoaded", () => {
+  finalizePage();
   const currentPage = window.location.pathname.split("/").pop();
+
+  if (!currentPage || currentPage === "index.html") {
+    initAuthPage();
+  }
 
   // Inicializar página de solicitudes del equipo
   if (currentPage === "equipo-solicitudes.html") {
