@@ -402,6 +402,21 @@ function setupHeaderNav() {
   const nav = document.getElementById("primaryNav");
   if (!nav) return;
 
+  const header = document.getElementById("globalNav");
+  const toggle = header?.querySelector("#navToggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const isOpen = header.dataset.navOpen === "true";
+      header.dataset.navOpen = isOpen ? "false" : "true";
+      toggle.setAttribute("aria-expanded", !isOpen);
+      if (!isOpen) {
+        document.body.classList.add("header-nav-open");
+      } else {
+        document.body.classList.remove("header-nav-open");
+      }
+    });
+  }
+
   initializeHeaderSubmenus(nav);
 
   nav.addEventListener("click", (event) => {
@@ -463,6 +478,11 @@ function setupHeaderNav() {
   document.addEventListener("click", (event) => {
     if (!nav.contains(event.target)) {
       closeAllSubmenus(null, nav);
+    }
+    if (header && !header.contains(event.target)) {
+      header.dataset.navOpen = "false";
+      toggle?.setAttribute("aria-expanded", "false");
+      document.body.classList.remove("header-nav-open");
     }
   });
 }
@@ -3027,6 +3047,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const userNameNode = document.getElementById("userName");
         if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
+        finalizePage();
       }
 
       if (currentPage === "admin-solicitudes.html") {
