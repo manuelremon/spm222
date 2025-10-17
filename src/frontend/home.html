@@ -90,6 +90,19 @@
     </main>
   </div>
 
+  <aside class="system-console hide" id="systemConsole" aria-live="polite">
+    <header class="system-console__header">
+      <span class="system-console__title">Estado del Sistema</span>
+      <div class="system-console__actions">
+        <span class="system-console__timestamp" id="systemConsoleTimestamp">Actualizado: --</span>
+        <button type="button" class="system-console__toggle" id="systemConsoleToggle" aria-label="Minimizar consola" aria-expanded="true" aria-controls="systemConsoleBody">−</button>
+      </div>
+    </header>
+    <div class="system-console__body" id="systemConsoleBody">
+      <ul class="system-console__list" id="systemConsoleList" role="list"></ul>
+    </div>
+  </aside>
+
   <div class="toasts" id="toasts"></div>
   <script src="app.js" defer></script>
 </body>

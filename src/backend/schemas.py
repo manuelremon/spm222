@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List, Literal
 from datetime import date
-from pydantic import BaseModel, Field, constr, conint, confloat, model_validator
+from pydantic import BaseModel, Field, constr, conint, confloat, model_validator, EmailStr
 
 IdSPM = constr(min_length=1, strip_whitespace=True, to_lower=True)
 
@@ -71,6 +71,10 @@ class BudgetIncreaseDecision(BaseModel):
 
 class UpdatePhoneRequest(BaseModel):
     telefono: constr(min_length=5, strip_whitespace=True, max_length=30)
+
+
+class UpdateMailRequest(BaseModel):
+    mail: EmailStr
 
 
 class AdditionalCentersRequest(BaseModel):

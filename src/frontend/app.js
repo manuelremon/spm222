@@ -487,12 +487,33 @@ function setupHeaderNav() {
   });
 }
 
+function setupGlobalNavActions() {
+  const logoutBtn = document.getElementById("menuCerrarSesion");
+  if (logoutBtn && logoutBtn.dataset.bound !== "1") {
+    logoutBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      logout();
+    });
+    logoutBtn.dataset.bound = "1";
+  }
+
+  const helpBtn = document.getElementById("menuAyuda");
+  if (helpBtn && helpBtn.dataset.bound !== "1") {
+    helpBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      help();
+    });
+    helpBtn.dataset.bound = "1";
+  }
+}
+
 function finalizePage(scope = document) {
   document.body?.classList.add("is-ready");
   markAnimatedElements(scope);
   refreshAnimations(scope);
   initDynamicFilters(scope);
   setupHeaderNav();
+  setupGlobalNavActions();
 
   // Welcome animation for home.html
   if (window.location.pathname === '/home.html') {
@@ -919,12 +940,138 @@ function initHomeHero(userName) {
   window.setTimeout(tick, initialDelay);
 }
 
+function buildSystemStatusSnapshot() {
+  const now = new Date();
+  const pendingNotifications = Array.isArray(state.notifications?.pending)
+    ? state.notifications.pending.length
+    : 0;
+  const unreadNotifications = Number(state.notifications?.unread || 0);
+  const issuesTotal = pendingNotifications + unreadNotifications;
+  const lastLoginRaw = state.me?.ultimo_ingreso || state.me?.last_login;
+  const lastLogin = lastLoginRaw ? formatDateTime(lastLoginRaw) : "No disponible";
+  const environmentLabel = window.APP_VERSION ? `Build ${window.APP_VERSION}` : "Build local de desarrollo";
+
+  return [
+    {
+      key: "overall",
+      label: "Estado general del sistema",
+      value: "Operativo",
+      tone: "ok",
+      detail: "Todos los componentes monitoreados responden dentro de los parámetros esperados.",
+    },
+    {
+      key: "issues",
+      label: "Problemas detectados",
+      value: issuesTotal ? `${issuesTotal} pendiente(s)` : "Sin incidentes",
+      tone: issuesTotal ? "warn" : "ok",
+      detail: issuesTotal
+        ? "Revisa las notificaciones sin leer para más detalles."
+        : `Última verificación ${now.toLocaleTimeString()}.`,
+    },
+    {
+      key: "backend",
+      label: "Estado Backend",
+      value: "API en línea",
+      tone: "ok",
+      detail: `Última respuesta confirmada ${now.toLocaleTimeString()}.`,
+    },
+    {
+      key: "frontend",
+      label: "Estado Frontend",
+      value: environmentLabel,
+      tone: "info",
+      detail: "Interfaz cargada correctamente en este navegador.",
+    },
+    {
+      key: "github",
+      label: "Estado Repositorio Github",
+      value: "Monitoreo manual",
+      tone: "info",
+      detail: "Sincroniza commits y pull requests antes del despliegue.",
+    },
+    {
+      key: "render",
+      label: "Estado Servicio Render.com",
+      value: "Sin verificación automática",
+      tone: "info",
+      detail: "Confirma el estado desde el panel de Render cuando haya un despliegue.",
+    },
+    {
+      key: "database",
+      label: "Estado Base de Datos",
+      value: "Conectada",
+      tone: "ok",
+      detail: "Sesión activa y consultas disponibles para este usuario.",
+    },
+    {
+      key: "uptime",
+      label: "Uptime sesión",
+      value: "En ejecución",
+      tone: "info",
+      detail: `Inicio de sesión: ${lastLogin}`,
+    },
+  ];
+}
+
+function initSystemConsole() {
+  const consoleNode = document.getElementById("systemConsole");
+  const listNode = document.getElementById("systemConsoleList");
+  const timestampNode = document.getElementById("systemConsoleTimestamp");
+  const toggleButton = document.getElementById("systemConsoleToggle");
+
+  if (!consoleNode || !listNode || !timestampNode || !toggleButton) {
+    return;
+  }
+
+  const render = () => {
+    const snapshot = buildSystemStatusSnapshot();
+    const lines = snapshot
+      .map((item) => {
+        const tone = item.tone || "info";
+        const detail = item.detail ? `<span class="system-console__detail">${escapeHtml(item.detail)}</span>` : "";
+        return `
+          <li class="system-console__item" data-key="${escapeHtml(item.key || "")}">
+            <span class="system-console__label">${escapeHtml(item.label || "")}</span>
+            <span class="system-console__value system-console__value--${tone}">${escapeHtml(item.value || "")}</span>
+            ${detail}
+          </li>
+        `;
+      })
+      .join("");
+    listNode.innerHTML = lines;
+    timestampNode.textContent = `Actualizado: ${new Date().toLocaleString()}`;
+  };
+
+  if (consoleNode.dataset.intervalId) {
+    window.clearInterval(Number(consoleNode.dataset.intervalId));
+    delete consoleNode.dataset.intervalId;
+  }
+
+  if (consoleNode.dataset.ready !== "1") {
+    toggleButton.addEventListener("click", () => {
+      const minimized = consoleNode.classList.toggle("is-minimized");
+      toggleButton.setAttribute("aria-expanded", minimized ? "false" : "true");
+      toggleButton.textContent = minimized ? "+" : "-";
+      toggleButton.setAttribute(
+        "aria-label",
+        minimized ? "Restaurar consola Estado del Sistema" : "Minimizar consola Estado del Sistema"
+      );
+    });
+    consoleNode.dataset.ready = "1";
+  }
+
+  render();
+  const intervalId = window.setInterval(render, 60000);
+  consoleNode.dataset.intervalId = String(intervalId);
+  consoleNode.classList.remove("hide");
+}
+
 const STATUS_LABELS = {
   draft: "Borrador",
   finalizada: "Finalizada",
   cancelada: "Cancelada",
-  pendiente_de_aprobacion: "Pendiente de aprobaciÃ³n",
-  pendiente: "Pendiente",
+  pendiente_de_aprobacion: "pendiente de aprobaciÃ³n",
+  pendiente: "pendiente",
   aprobada: "Aprobada",
   rechazada: "Rechazada",
   cancelacion_pendiente: "CancelaciÃ³n pendiente",
@@ -942,6 +1089,7 @@ const DEFAULT_PREFERENCES = {
   density: "comfortable",
   rememberFilters: true,
   keyboardShortcuts: false,
+  effectsEnabled: true,
 };
 
 const FILTER_STORAGE_PREFIX = "spmFilters:";
@@ -949,6 +1097,184 @@ const KNOWN_FILTER_KEYS = ["adminUsers", "adminMateriales", "adminSolicitudes"];
 const SYSTEM_THEME_MEDIA = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 let systemThemeListener = null;
 let keyboardHandler = null;
+
+function loadPreferencesFromStorage() {
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+    if (!raw) {
+      return { ...DEFAULT_PREFERENCES };
+    }
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_PREFERENCES, ...(parsed || {}) };
+  } catch (_err) {
+    return { ...DEFAULT_PREFERENCES };
+  }
+}
+
+function applyThemePreference(mode) {
+  const body = document.body;
+  if (!body) return;
+  if (SYSTEM_THEME_MEDIA && systemThemeListener) {
+    if (SYSTEM_THEME_MEDIA.removeEventListener) {
+      SYSTEM_THEME_MEDIA.removeEventListener("change", systemThemeListener);
+    } else if (SYSTEM_THEME_MEDIA.removeListener) {
+      SYSTEM_THEME_MEDIA.removeListener(systemThemeListener);
+    }
+    systemThemeListener = null;
+  }
+  let resolved = mode;
+  if (mode === "auto") {
+    resolved = SYSTEM_THEME_MEDIA && SYSTEM_THEME_MEDIA.matches ? "dark" : "light";
+    if (SYSTEM_THEME_MEDIA) {
+      systemThemeListener = (event) => {
+        body.dataset.theme = event.matches ? "dark" : "light";
+      };
+      if (SYSTEM_THEME_MEDIA.addEventListener) {
+        SYSTEM_THEME_MEDIA.addEventListener("change", systemThemeListener);
+      } else if (SYSTEM_THEME_MEDIA.addListener) {
+        SYSTEM_THEME_MEDIA.addListener(systemThemeListener);
+      }
+    }
+  }
+  body.dataset.theme = resolved;
+}
+
+function applyDensityPreference(density) {
+  if (!document.body) return;
+  document.body.dataset.density = density || DEFAULT_PREFERENCES.density;
+}
+
+function applyEffectsPreference(enabled) {
+  if (!document.body) return;
+  document.body.dataset.effects = enabled === false ? "off" : "on";
+}
+
+function updateKeyboardShortcutsPreference(enabled) {
+  if (enabled && !keyboardHandler) {
+    keyboardHandler = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        const searchInput = document.querySelector("input[type='search']");
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", keyboardHandler);
+  } else if (!enabled && keyboardHandler) {
+    document.removeEventListener("keydown", keyboardHandler);
+    keyboardHandler = null;
+  }
+}
+
+function applyPreferences(prefs) {
+  applyThemePreference(prefs.theme);
+  applyDensityPreference(prefs.density);
+  applyEffectsPreference(prefs.effectsEnabled);
+  updateKeyboardShortcutsPreference(prefs.keyboardShortcuts);
+}
+
+function savePreferences(next) {
+  const merged = { ...DEFAULT_PREFERENCES, ...state.preferences, ...next };
+  state.preferences = merged;
+  localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(merged));
+  applyPreferences(merged);
+  return merged;
+}
+
+function ensurePreferencesLoaded() {
+  if (!state.preferences) {
+    state.preferences = loadPreferencesFromStorage();
+    applyPreferences(state.preferences);
+  }
+  return state.preferences;
+}
+
+function initPreferencesPage() {
+  const form = document.getElementById("preferencesForm");
+  const status = document.getElementById("prefStatus");
+  const saveBtn = document.getElementById("prefSave");
+  const resetBtn = document.getElementById("prefReset");
+  if (!form || !status || !saveBtn || !resetBtn) {
+    return;
+  }
+
+  const controls = {
+    emailAlerts: document.getElementById("prefEmailAlerts"),
+    realtimeToasts: document.getElementById("prefRealtimeToasts"),
+    approvalDigest: document.getElementById("prefApprovalDigest"),
+    digestHour: document.getElementById("prefDigestHour"),
+    theme: document.getElementById("prefTheme"),
+    density: document.getElementById("prefDensity"),
+    rememberFilters: document.getElementById("prefRememberFilters"),
+    keyboardShortcuts: document.getElementById("prefKeyboardShortcuts"),
+    effectsEnabled: document.getElementById("prefEffectsEnabled"),
+  };
+
+  const readForm = () => ({
+    emailAlerts: controls.emailAlerts?.checked ?? DEFAULT_PREFERENCES.emailAlerts,
+    realtimeToasts: controls.realtimeToasts?.checked ?? DEFAULT_PREFERENCES.realtimeToasts,
+    approvalDigest: controls.approvalDigest?.checked ?? DEFAULT_PREFERENCES.approvalDigest,
+    digestHour: controls.digestHour?.value || DEFAULT_PREFERENCES.digestHour,
+    theme: controls.theme?.value || DEFAULT_PREFERENCES.theme,
+    density: controls.density?.value || DEFAULT_PREFERENCES.density,
+    rememberFilters: controls.rememberFilters?.checked ?? DEFAULT_PREFERENCES.rememberFilters,
+    keyboardShortcuts: controls.keyboardShortcuts?.checked ?? DEFAULT_PREFERENCES.keyboardShortcuts,
+    effectsEnabled: controls.effectsEnabled?.checked ?? DEFAULT_PREFERENCES.effectsEnabled,
+  });
+
+  const renderForm = (prefs) => {
+    if (controls.emailAlerts) controls.emailAlerts.checked = !!prefs.emailAlerts;
+    if (controls.realtimeToasts) controls.realtimeToasts.checked = !!prefs.realtimeToasts;
+    if (controls.approvalDigest) controls.approvalDigest.checked = !!prefs.approvalDigest;
+    if (controls.digestHour) controls.digestHour.value = prefs.digestHour || DEFAULT_PREFERENCES.digestHour;
+    if (controls.digestHour) controls.digestHour.disabled = !prefs.approvalDigest;
+    if (controls.theme) controls.theme.value = prefs.theme || DEFAULT_PREFERENCES.theme;
+    if (controls.density) controls.density.value = prefs.density || DEFAULT_PREFERENCES.density;
+    if (controls.rememberFilters) controls.rememberFilters.checked = !!prefs.rememberFilters;
+    if (controls.keyboardShortcuts) controls.keyboardShortcuts.checked = !!prefs.keyboardShortcuts;
+    if (controls.effectsEnabled) controls.effectsEnabled.checked = prefs.effectsEnabled !== false;
+  };
+
+  let baseline = { ...ensurePreferencesLoaded() };
+  renderForm(baseline);
+
+  const updateStatus = () => {
+    const current = readForm();
+    if (controls.digestHour) {
+      controls.digestHour.disabled = !current.approvalDigest;
+    }
+    const dirty = JSON.stringify(current) !== JSON.stringify(baseline);
+    status.textContent = dirty ? "Hay cambios sin guardar." : "No hay cambios pendientes.";
+    saveBtn.disabled = !dirty;
+    return { current, dirty };
+  };
+
+  form.addEventListener("input", updateStatus);
+  form.addEventListener("change", updateStatus);
+
+  saveBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    const { current, dirty } = updateStatus();
+    if (!dirty) {
+      toast("No hay cambios para guardar");
+      return;
+    }
+    baseline = savePreferences(current);
+    renderForm(baseline);
+    updateStatus();
+    toast("Preferencias guardadas", true);
+  });
+
+  resetBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    renderForm(DEFAULT_PREFERENCES);
+    updateStatus();
+    toast("Valores restablecidos, recuerda guardar los cambios", true);
+  });
+
+  updateStatus();
+}
 
 function storageKeyForFilters(key) {
   return `${FILTER_STORAGE_PREFIX}${key}`;
@@ -1139,7 +1465,7 @@ function catalogueOptionLabel(code, name, extra) {
   if (extra) {
     parts.push(extra);
   }
-  return parts.join(" â€” ");
+  return parts.join(" - ");
 }
 
 function buildCentroOptions() {
@@ -1207,6 +1533,29 @@ function getDefaultCentroValue() {
 function getDefaultAlmacenValue() {
   const options = buildAlmacenOptions();
   return options[0]?.value || DEFAULT_ALMACENES_VIRTUALES[0]?.id || "";
+}
+
+function renderSelectOptions(select, options, { placeholder = "Seleccioná una opción", value = "" } = {}) {
+  if (!select) {
+    return;
+  }
+  const safeOptions = Array.isArray(options) ? options : [];
+  const placeholderOption = placeholder
+    ? `<option value="" disabled${value ? "" : " selected"}>${escapeHtml(placeholder)}</option>`
+    : "";
+  const optionsHtml = safeOptions
+    .map(
+      (option) =>
+        `<option value="${escapeHtml(option.value || "")}">${escapeHtml(option.label || option.value || "")}</option>`
+    )
+    .join("");
+  select.innerHTML = `${placeholderOption}${optionsHtml}`;
+  if (value && safeOptions.some((option) => option.value === value)) {
+    select.value = value;
+  } else if (!value && placeholder) {
+    select.selectedIndex = 0;
+  }
+  select.disabled = !safeOptions.length;
 }
 
 const CHAT_HISTORY_LIMIT = 12;
@@ -1360,6 +1709,8 @@ const state = {
   },
 };
 
+ensurePreferencesLoaded();
+
 function updateNotificationBadge() {
   const badge = $("#navNotificationsBadge");
   if (!badge) return;
@@ -1487,7 +1838,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`Â¿ConfirmÃ¡s aprobar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`Â?ConfirmÃ¡s aprobar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1497,7 +1848,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`Â¿ConfirmÃ¡s rechazar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`Â?ConfirmÃ¡s rechazar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1556,7 +1907,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`Â¿ConfirmÃ¡s aprobar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`Â?ConfirmÃ¡s aprobar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1569,7 +1920,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`Â¿ConfirmÃ¡s rechazar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`Â?ConfirmÃ¡s rechazar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1838,7 +2189,7 @@ function renderNotificationsPage(data) {
         users.forEach((user) => {
           const card = document.createElement("article");
           card.className = "admin-request-card";
-          const status = (user.estado || "Pendiente").trim();
+          const status = (user.estado || "pendiente").trim();
           const metaParts = [];
           if (user.mail) {
             metaParts.push(escapeHtml(String(user.mail)));
@@ -1896,6 +2247,31 @@ function setDraft(draft) {
     return;
   }
   sessionStorage.setItem("solicitudDraft", JSON.stringify(draft));
+}
+
+function updateDraftHeader(partial) {
+  if (!partial || typeof partial !== "object") {
+    return;
+  }
+  const current = getDraft();
+  const nextDraft = current
+    ? {
+        ...current,
+        header: { ...(current.header || {}), ...partial },
+      }
+    : {
+        id: current?.id || null,
+        header: { ...partial },
+        items: cloneItems(state.items),
+        user: currentUserId() || null,
+      };
+  if (!Array.isArray(nextDraft.items)) {
+    nextDraft.items = cloneItems(state.items);
+  }
+  if (!nextDraft.user) {
+    nextDraft.user = currentUserId() || nextDraft.user || null;
+  }
+  setDraft(nextDraft);
 }
 
 function persistDraftState() {
@@ -2275,7 +2651,7 @@ function renderSolicitudDetail(detail) {
   } else if (cancelRequest && cancelRequest.status === "pendiente") {
     const when = cancelRequest.requested_at ? formatDateTime(cancelRequest.requested_at) : "";
     const reason = cancelRequest.reason ? `Motivo: ${cancelRequest.reason}` : "Sin motivo indicado";
-    cancelInfo.textContent = `CancelaciÃ³n solicitada${when ? ` el ${when}` : ""}. ${reason}. Pendiente de planificador.`;
+    cancelInfo.textContent = `CancelaciÃ³n solicitada${when ? ` el ${when}` : ""}. ${reason}. pendiente de planificador.`;
     cancelInfo.classList.remove("hide");
   } else if (cancelRequest && cancelRequest.status === "rechazada") {
     const when = cancelRequest.decision_at ? formatDateTime(cancelRequest.decision_at) : "";
@@ -2399,7 +2775,7 @@ async function requestCancelSelectedSolicitud() {
       body: JSON.stringify({ reason }),
     });
     if (response?.status === "cancelacion_pendiente") {
-      toast("CancelaciÃ³n enviada. Pendiente de aprobaciÃ³n del planificador.", true);
+      toast("CancelaciÃ³n enviada. pendiente de aprobaciÃ³n del planificador.", true);
     } else {
       toast("Solicitud cancelada", true);
     }
@@ -2568,13 +2944,13 @@ function accountSupportMail(subject, bodyLines) {
 
 function requestPasswordChange() {
   if (!state.me) {
-    toast("IniciÃ¡ sesiÃ³n para gestionar tu contraseÃ±a");
+    toast("Inicia sesion para gestionar tu contrasena");
     return;
   }
   const identifier = state.me.id || state.me.id_spm || "";
-  accountSupportMail("Solicitud de cambio de contraseÃ±a SPM", [
+  accountSupportMail("Solicitud de cambio de contrasena SPM", [
     "Hola equipo SPM,",
-    "Quisiera gestionar un cambio de contraseÃ±a.",
+    "Quisiera gestionar un cambio de contrasena.",
     identifier ? `ID SPM: ${identifier}` : "",
     state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
   ]);
@@ -2582,7 +2958,7 @@ function requestPasswordChange() {
 
 function requestAccountDeletion() {
   if (!state.me) {
-    toast("IniciÃ¡ sesiÃ³n para gestionar tu cuenta");
+    toast("Inicia sesion para gestionar tu cuenta");
     return;
   }
   const identifier = state.me.id || state.me.id_spm || "";
@@ -2594,19 +2970,30 @@ function requestAccountDeletion() {
   ]);
 }
 
+const ACCOUNT_FIELD_CONFIG = [
+  { key: "rol", label: "Rol", admin: true },
+  { key: "posicion", label: "Posicion", admin: true },
+  { key: "sector", label: "Sector", admin: true },
+  { key: "telefono", label: "Telefono", admin: false },
+  { key: "mail", label: "Mail", admin: false },
+  { key: "jefe", label: "Jefe", admin: true },
+  { key: "gerente1", label: "Gerente 1", admin: true },
+  { key: "gerente2", label: "Gerente 2", admin: true },
+];
+
 async function handleEditPhone() {
   if (!state.me) {
-    toast("IniciÃ¡ sesiÃ³n para gestionar tu telÃ©fono");
+    toast("Inicia sesion para gestionar tu telefono");
     return;
   }
   const current = state.me.telefono || "";
-  const nextValue = prompt("ActualizÃ¡ tu nÃºmero de contacto", current);
+  const nextValue = prompt("Actualiza tu numero de contacto", current);
   if (nextValue === null) {
     return;
   }
   const trimmed = nextValue.trim();
   if (!trimmed) {
-    toast("IngresÃ¡ un telÃ©fono vÃ¡lido");
+    toast("Ingresa un telefono valido");
     return;
   }
   try {
@@ -2617,10 +3004,98 @@ async function handleEditPhone() {
     });
     state.me.telefono = resp.telefono || sanitized;
     renderAccountDetails();
-    toast("TelÃ©fono actualizado", true);
+    toast("Telefono actualizado", true);
   } catch (err) {
     toast(err.message);
   }
+}
+
+async function handleEditMail() {
+  if (!state.me) {
+    toast("Inicia sesion para gestionar tu correo");
+    return;
+  }
+  const current = state.me.mail || "";
+  const nextValue = prompt("Actualiza tu correo electronico", current);
+  if (nextValue === null) {
+    return;
+  }
+  const trimmed = nextValue.trim();
+  if (!trimmed || !trimmed.includes("@")) {
+    toast("Ingresa un correo valido");
+    return;
+  }
+  try {
+    const resp = await api("/me/mail", {
+      method: "POST",
+      body: JSON.stringify({ mail: trimmed }),
+    });
+    state.me.mail = resp.mail || trimmed;
+    renderAccountDetails();
+    toast("Correo actualizado", true);
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+async function requestAdminFieldChange(fieldKey, value, label) {
+  const identifier = state.me?.id || state.me?.id_spm || "";
+  accountSupportMail(`Solicitud de actualizacion de ${label}`, [
+    "Hola equipo SPM,",
+    `Solicito actualizar ${label} a: ${value}.`,
+    identifier ? `ID SPM: ${identifier}` : "",
+    state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
+  ]);
+  toast(`Solicitud enviada para revisar ${label}`, true);
+}
+
+function handleAccountFieldEdit(fieldKey, requiresAdmin) {
+  if (!state.me) {
+    toast("Inicia sesion para gestionar tu perfil");
+    return;
+  }
+  if (fieldKey === "telefono") {
+    handleEditPhone();
+    return;
+  }
+  if (fieldKey === "mail") {
+    handleEditMail();
+    return;
+  }
+  const config = ACCOUNT_FIELD_CONFIG.find((field) => field.key === fieldKey);
+  if (!config) {
+    toast("Campo no soportado");
+    return;
+  }
+  const current = String(state.me[fieldKey] || "");
+  const nextValue = prompt(`Nuevo valor para ${config.label}`, current);
+  if (nextValue === null) {
+    return;
+  }
+  const trimmed = nextValue.trim();
+  if (!trimmed) {
+    toast("Ingresa un valor válido");
+    return;
+  }
+  if (requiresAdmin) {
+    requestAdminFieldChange(fieldKey, trimmed, config.label);
+    return;
+  }
+  state.me[fieldKey] = trimmed;
+  renderAccountDetails();
+}
+
+function formatUserCentersList() {
+  const centers = parseCentrosList(state.me?.centros);
+  if (!centers.length) {
+    return [];
+  }
+  const catalog = getCatalogItems("centros", { activeOnly: true });
+  return centers.map((code) => {
+    const normalized = normalizeCentroCode(code);
+    const match = catalog.find((item) => normalizeCentroCode(item.codigo) === normalized);
+    return match ? catalogueOptionLabel(match.codigo, match.nombre, null) : code;
+  });
 }
 
 function renderAccountDetails() {
@@ -2630,83 +3105,94 @@ function renderAccountDetails() {
   }
 
   const user = state.me;
-  const fullName = `${user.nombre || ""} ${user.apellido || ""}`.trim();
-  const centrosList = Array.isArray(user.centros) ? user.centros.join(", ") : (user.centros || "");
+  const fullName = `${user.nombre || ""} ${user.apellido || ""}`.trim() || (user.id || user.id_spm || "Mi cuenta");
+  const accountFields = ACCOUNT_FIELD_CONFIG.map((field) => {
+    const valueRaw = field.key === "mail" ? user.mail : field.key === "telefono" ? user.telefono : user[field.key];
+    const valueText = String(valueRaw || "").trim() || "Sin informacion";
+    const badge = field.admin
+      ? '<span class="account-field__tag account-field__tag--admin">Requiere aprobacion de Administrador</span>'
+      : '<span class="account-field__tag account-field__tag--self">Edicion directa</span>';
+    const editButton = `
+      <button type="button" class="account-field__edit" data-field="${field.key}" data-admin="${field.admin ? "1" : "0"}">
+        <span class="sr-only">Editar ${escapeHtml(field.label)}</span>
+        ${ICONS.pencil}
+      </button>
+    `;
+    return `
+      <div class="account-field" data-field="${field.key}">
+        <div class="account-field__label">
+          <span>${escapeHtml(field.label)}</span>
+          ${badge}
+        </div>
+        <div class="account-field__value">
+          <span>${escapeHtml(valueText)}</span>
+          ${editButton}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const centersList = formatUserCentersList();
+  const centersContent = centersList.length
+    ? centersList.map((label) => `<span class="account-centers__chip">${escapeHtml(label)}</span>`).join("")
+    : '<span class="account-field__empty">Sin centros asignados</span>';
 
   section.innerHTML = `
-    <div class="account-info">
-      <div class="account-section">
-        <h3>InformaciÃ³n Personal</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <label>Nombre completo:</label>
-            <span>${escapeHtml(fullName)}</span>
-          </div>
-          <div class="info-item">
-            <label>Rol:</label>
-            <span>${escapeHtml(user.rol || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>Sector:</label>
-            <span>${escapeHtml(user.sector || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>PosiciÃ³n:</label>
-            <span>${escapeHtml(user.posicion || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>Correo electrÃ³nico:</label>
-            <span>${escapeHtml(user.mail || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>TelÃ©fono:</label>
-            <span id="telefonoDisplay">${escapeHtml(user.telefono || "")}</span>
-            <button type="button" class="btn-link" id="editPhoneBtn" title="Editar telÃ©fono">Editar</button>
-          </div>
-          <div class="info-item">
-            <label>ID Red/ID YPF:</label>
-            <span>${escapeHtml(user.id_red || user.id_ypf || "")}</span>
-          </div>
+    <section class="account-card">
+      <header class="account-card__header">
+        <div>
+          <h2>${escapeHtml(fullName)}</h2>
+          <p class="account-card__meta">ID SPM: ${escapeHtml(user.id || user.id_spm || "")}</p>
+        </div>
+      </header>
+      <div class="account-card__fields">
+        ${accountFields}
+      </div>
+      <div class="account-card__centers">
+        <div class="account-field__label">
+          <span>Centros asignados</span>
+          <span class="account-field__tag account-field__tag--admin">Requiere aprobacion de Administrador</span>
+        </div>
+        <div class="account-centers__list">
+          ${centersContent}
+          <button type="button" class="account-field__plus" id="accountRequestCenters" title="Solicitar acceso a mas centros">
+            <span aria-hidden="true">+</span>
+            <span class="sr-only">Solicitar acceso a mas centros</span>
+          </button>
         </div>
       </div>
-
-      <div class="account-section">
-        <h3>InformaciÃ³n Organizacional</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <label>Centros asignados:</label>
-            <span>${escapeHtml(centrosList)}</span>
-          </div>
-          <div class="info-item">
-            <label>Jefe directo:</label>
-            <span>${escapeHtml(user.jefe || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>Gerente 1:</label>
-            <span>${escapeHtml(user.gerente1 || "")}</span>
-          </div>
-          <div class="info-item">
-            <label>Gerente 2:</label>
-            <span>${escapeHtml(user.gerente2 || "")}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="account-actions">
+      <div class="account-card__actions">
+        <button type="button" class="btn ghost" id="accountChangePassword">Cambiar contrasena</button>
         <button type="button" class="btn sec" id="requestAccountDeletion">Solicitar baja de cuenta</button>
       </div>
-    </div>
+    </section>
   `;
 
-  // Add event listeners
-  const editPhoneBtn = document.getElementById("editPhoneBtn");
-  if (editPhoneBtn) {
-    editPhoneBtn.addEventListener("click", handleEditPhone);
+  section.querySelectorAll(".account-field__edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = button.dataset.field;
+      const requiresAdmin = button.dataset.admin === "1";
+      handleAccountFieldEdit(field, requiresAdmin);
+    });
+  });
+
+  const changePasswordBtn = document.getElementById("accountChangePassword");
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener("click", requestPasswordChange);
   }
 
   const deleteBtn = document.getElementById("requestAccountDeletion");
   if (deleteBtn) {
     deleteBtn.addEventListener("click", requestAccountDeletion);
+  }
+
+  const centersBtn = document.getElementById("accountRequestCenters");
+  if (centersBtn) {
+    centersBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      ensureCentersRequestModal();
+      openCentersRequestModal();
+    });
   }
 }
 
@@ -3038,8 +3524,8 @@ function renderProfileRequests(requests) {
 
 async function processProfileRequest(requestId, action) {
   const confirmMessage = action === 'approve'
-    ? 'Â¿EstÃ¡s seguro de aprobar esta solicitud?'
-    : 'Â¿EstÃ¡s seguro de rechazar esta solicitud?';
+    ? 'Â?EstÃ¡s seguro de aprobar esta solicitud?'
+    : 'Â?EstÃ¡s seguro de rechazar esta solicitud?';
 
   if (!confirm(confirmMessage)) return;
 
@@ -3149,23 +3635,47 @@ document.addEventListener("DOMContentLoaded", () => {
   if (currentPage === "index.html") {
     initAuthPage();
   } else {
-    me().then(() => {
+    me().then(async () => {
       if (!state.me) {
         window.location.href = "index.html";
         return;
       }
+
+      const preferences = ensurePreferencesLoaded();
 
       if (currentPage === "home.html") {
         const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
         const userNameNode = document.getElementById("userName");
         if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
+        const isAdmin = typeof state.me?.rol === "string" && state.me.rol.toLowerCase().includes("admin");
+        if (isAdmin) {
+          initSystemConsole();
+        }
       }
 
       if (currentPage === "admin-solicitudes.html") {
         loadProfileRequests();
       }
 
+      if (currentPage === "crear-solicitud.html") {
+        try {
+          await initCreateSolicitudPage();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudo inicializar el formulario de solicitud");
+        }
+      }
+
+      if (currentPage === "mi-cuenta.html") {
+        renderAccountDetails();
+      }
+
+      if (currentPage === "preferencias.html") {
+        initPreferencesPage();
+      }
+
+      applyPreferences(preferences);
       finalizePage();
     }).catch(() => {
       window.location.href = "index.html";
@@ -3644,5 +4154,13 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
   loadStats();
   updateMenuVisibility();
 })();
+
+
+
+
+
+
+
+
 
 

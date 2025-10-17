@@ -7,6 +7,7 @@ from ..schemas import (
     RegisterRequest,
     UpdatePhoneRequest,
     AdditionalCentersRequest,
+    UpdateMailRequest,
 )
 from ..security import verify_password, hash_password, create_access_token, verify_access_token
 
@@ -164,6 +165,22 @@ def update_phone():
         con.execute("UPDATE usuarios SET telefono=? WHERE id_spm=?", (payload.telefono, uid))
         con.commit()
     return {"ok": True, "telefono": payload.telefono}
+
+
+@bp.route("/me/mail", methods=["POST", "OPTIONS"])
+def update_mail():
+    if request.method == "OPTIONS":
+        return "", 204
+    uid, error = _require_user_id()
+    if error:
+        code, msg, status = error
+        return {"ok": False, "error": {"code": code, "message": msg}}, status
+    payload = UpdateMailRequest(**request.get_json(force=True))
+    mail_value = payload.mail.strip().lower()
+    with get_connection() as con:
+        con.execute("UPDATE usuarios SET mail=? WHERE id_spm=?", (mail_value, uid))
+        con.commit()
+    return {"ok": True, "mail": mail_value}
 
 
 @bp.route("/me/centros/solicitud", methods=["POST", "OPTIONS"])
