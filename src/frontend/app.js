@@ -1957,6 +1957,7 @@ async function me() {
   try {
     const resp = await api("/me");
     state.me = resp.usuario;
+    updateMenuVisibility();
     if (state.me) {
       state.me.centros = parseCentrosList(state.me.centros);
       if (typeof state.me.sector !== "string") {
@@ -1975,12 +1976,14 @@ async function me() {
     }
   } catch (_ignored) {
     state.me = null;
+    updateMenuVisibility();
   }
 }
 
 async function logout() {
   await api("/logout", { method: "POST" });
   state.me = null;
+  updateMenuVisibility();
   state.items = [];
   sessionStorage.removeItem("solicitudDraft");
   window.location.href = "index.html";
@@ -3059,16 +3062,39 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Controlar visibilidad del menú de administración
-function updateAdminMenuVisibility() {
+// Controlar visibilidad del menú según el rol
+function updateMenuVisibility() {
   const adminMenuItem = document.getElementById("adminMenuItem");
-  if (!adminMenuItem) return;
+  const plannerMenuItem = document.getElementById("plannerMenuItem");
+  const approverMenuItem = document.getElementById("approverMenuItem");
 
-  const isAdmin = Boolean(state.notifications?.admin?.is_admin);
-  if (isAdmin) {
-    adminMenuItem.classList.remove("hide");
-  } else {
-    adminMenuItem.classList.add("hide");
+  const userRole = state.me?.rol?.toLowerCase();
+
+  // Admin
+  if (adminMenuItem) {
+    if (userRole === "admin") {
+      adminMenuItem.classList.remove("hide");
+    } else {
+      adminMenuItem.classList.add("hide");
+    }
+  }
+
+  // Planificador
+  if (plannerMenuItem) {
+    if (userRole === "planificador") {
+      plannerMenuItem.classList.remove("hide");
+    } else {
+      plannerMenuItem.classList.add("hide");
+    }
+  }
+
+  // Aprobador
+  if (approverMenuItem) {
+    if (userRole === "aprobador") {
+      approverMenuItem.classList.remove("hide");
+    } else {
+      approverMenuItem.classList.add("hide");
+    }
   }
 }
 
@@ -3076,7 +3102,7 @@ function updateAdminMenuVisibility() {
 const originalRenderNotificationsPage = renderNotificationsPage;
 renderNotificationsPage = function(data) {
   originalRenderNotificationsPage(data);
-  updateAdminMenuVisibility();
+  updateMenuVisibility();
 };
 
 // ====== SHIMS DE COMPATIBILIDAD (parche rápido) ======
