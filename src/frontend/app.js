@@ -493,6 +493,17 @@ function finalizePage(scope = document) {
   refreshAnimations(scope);
   initDynamicFilters(scope);
   setupHeaderNav();
+
+  // Welcome animation for home.html
+  if (window.location.pathname === '/home.html' && !localStorage.getItem('welcomeShown')) {
+    const hero = document.querySelector('.home-hero');
+    if (hero) {
+      hero.addEventListener('animationend', () => {
+        hero.style.display = 'none';
+        localStorage.setItem('welcomeShown', 'true');
+      });
+    }
+  }
 }
 
 const tableSortStates = new WeakMap();
