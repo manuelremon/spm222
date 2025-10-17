@@ -1,4 +1,4 @@
-// para evitar problemas de CSP/CORS cuando se sirve tras Nginx.
+﻿// para evitar problemas de CSP/CORS cuando se sirve tras Nginx.
 window.addEventListener('error', (e) => {
   const box = document.createElement('div');
   Object.assign(box.style, {
@@ -8,7 +8,7 @@ window.addEventListener('error', (e) => {
   box.textContent = 'JS error: ' + (e?.error?.stack || e.message || e.toString());
   document.body.appendChild(box);
 });
-// Asegura que el contenido sea visible al cargar la página
+// Asegura que el contenido sea visible al cargar la pÃ¡gina
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('is-ready');
 });
@@ -99,21 +99,21 @@ function escapeHtml(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const normalised = typeof value === "string" ? value.replace("T", " ") : value;
   const date = new Date(normalised);
   if (Number.isNaN(date.getTime())) {
-    return typeof value === "string" ? value : "—";
+    return typeof value === "string" ? value : "â€”";
   }
   return date.toLocaleString();
 }
 
 function formatDateOnly(value) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const normalised = typeof value === "string" ? value.replace("T", " ") : value;
   const date = new Date(normalised);
   if (Number.isNaN(date.getTime())) {
-    return typeof value === "string" ? value : "—";
+    return typeof value === "string" ? value : "â€”";
   }
   return date.toLocaleDateString();
 }
@@ -495,13 +495,23 @@ function finalizePage(scope = document) {
   setupHeaderNav();
 
   // Welcome animation for home.html
-  if (window.location.pathname === '/home.html' && !localStorage.getItem('welcomeShown')) {
+  if (window.location.pathname === '/home.html') {
     const hero = document.querySelector('.home-hero');
     if (hero) {
-      hero.addEventListener('animationend', () => {
-        hero.style.display = 'none';
-        localStorage.setItem('welcomeShown', 'true');
-      });
+      const freezeHeroAnimation = () => {
+        hero.style.opacity = '1';
+        hero.style.transform = 'translate(-50%, -50%)';
+        hero.style.animation = 'none';
+      };
+
+      if (localStorage.getItem('welcomeShown')) {
+        freezeHeroAnimation();
+      } else {
+        hero.addEventListener('animationend', () => {
+          freezeHeroAnimation();
+          localStorage.setItem('welcomeShown', 'true');
+        }, { once: true });
+      }
     }
   }
 }
@@ -913,12 +923,12 @@ const STATUS_LABELS = {
   draft: "Borrador",
   finalizada: "Finalizada",
   cancelada: "Cancelada",
-  pendiente_de_aprobacion: "Pendiente de aprobación",
+  pendiente_de_aprobacion: "Pendiente de aprobaciÃ³n",
   pendiente: "Pendiente",
   aprobada: "Aprobada",
   rechazada: "Rechazada",
-  cancelacion_pendiente: "Cancelación pendiente",
-  cancelacion_rechazada: "Cancelación rechazada",
+  cancelacion_pendiente: "CancelaciÃ³n pendiente",
+  cancelacion_rechazada: "CancelaciÃ³n rechazada",
 };
 
 const PENDING_SOLICITUD_KEY = "pendingSolicitudId";
@@ -982,7 +992,7 @@ function clearAllStoredFilters() {
 
 function statusBadge(status) {
   const normalized = (status || "").toLowerCase();
-  const fallback = normalized ? normalized.replace(/_/g, " ") : "—";
+  const fallback = normalized ? normalized.replace(/_/g, " ") : "â€”";
   const label = STATUS_LABELS[normalized] || fallback;
   const pretty = STATUS_LABELS[normalized]
     ? label
@@ -993,9 +1003,9 @@ function statusBadge(status) {
 const DEFAULT_CENTROS = ["1008", "1050", "1500"];
 
 const DEFAULT_ALMACENES_VIRTUALES = [
-  { id: "AV-CENTRAL", label: "AV-CENTRAL - Almacén Central" },
-  { id: "AV-MANT", label: "AV-MANT - Depósito de Mantenimiento" },
-  { id: "AV-REP", label: "AV-REP - Repuestos Críticos" },
+  { id: "AV-CENTRAL", label: "AV-CENTRAL - AlmacÃ©n Central" },
+  { id: "AV-MANT", label: "AV-MANT - DepÃ³sito de Mantenimiento" },
+  { id: "AV-REP", label: "AV-REP - Repuestos CrÃ­ticos" },
   { id: "AV-SERV", label: "AV-SERV - Servicios Industriales" },
 ];
 
@@ -1018,8 +1028,8 @@ const ADMIN_CONFIG_TABLE_FIELDS = {
 };
 
 const ADMIN_CONFIG_LABELS = {
-  centros: "centro logístico",
-  almacenes: "almacén virtual",
+  centros: "centro logÃ­stico",
+  almacenes: "almacÃ©n virtual",
   roles: "rol",
   puestos: "puesto",
   sectores: "sector",
@@ -1090,31 +1100,31 @@ async function loadCatalogData(resource = null, { silent = false, includeInactiv
       const endpoint = params.size ? `/catalogos/${resource}?${params.toString()}` : `/catalogos/${resource}`;
       const resp = await api(endpoint);
       if (!resp?.ok) {
-        throw new Error(resp?.error?.message || "No se pudo cargar el catálogo");
+        throw new Error(resp?.error?.message || "No se pudo cargar el catÃ¡logo");
       }
       setCatalogItems(resource, resp.items || []);
       if (!silent) {
-        toast(`Catálogo de ${adminConfigLabel(resource)} actualizado`, true);
+        toast(`CatÃ¡logo de ${adminConfigLabel(resource)} actualizado`, true);
       }
       return resp.items || [];
     }
     const endpoint = params.size ? `/catalogos?${params.toString()}` : "/catalogos";
     const resp = await api(endpoint);
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo cargar la configuración");
+      throw new Error(resp?.error?.message || "No se pudo cargar la configuraciÃ³n");
     }
     const normalized = ensureCatalogDefaults(resp.data || {});
     CATALOG_KEYS.forEach((key) => {
       setCatalogItems(key, normalized[key]);
     });
     if (!silent) {
-      toast("Catálogos sincronizados", true);
+      toast("CatÃ¡logos sincronizados", true);
     }
     return normalized;
   } catch (err) {
     console.error(err);
     if (!silent) {
-      toast(err.message || "No se pudieron cargar los catálogos");
+      toast(err.message || "No se pudieron cargar los catÃ¡logos");
     }
     return null;
   }
@@ -1129,7 +1139,7 @@ function catalogueOptionLabel(code, name, extra) {
   if (extra) {
     parts.push(extra);
   }
-  return parts.join(" — ");
+  return parts.join(" â€” ");
 }
 
 function buildCentroOptions() {
@@ -1242,7 +1252,7 @@ function renderCart(items) {
     tr.innerHTML = `
       <td>${item.codigo}</td>
       <td>${item.descripcion || ""}</td>
-      <td>${item.unidad || "—"}</td>
+      <td>${item.unidad || "â€”"}</td>
       <td>${formatCurrency(precio)}</td>
       <td><input type="number" min="1" value="${cantidad}" data-index="${index}" class="qty-input"></td>
       <td>${formatCurrency(subtotal)}</td>
@@ -1394,7 +1404,7 @@ async function loadNotificationsSummary(options = {}) {
     if (state.notifications.unread > 0 && !options.markAsRead) {
       const latestUnread = state.notifications.items.find(item => !item.leido);
       if (latestUnread) {
-        showNotificationPopup(`Tienes ${state.notifications.unread} notificación(es) pendiente(s)`);
+        showNotificationPopup(`Tienes ${state.notifications.unread} notificaciÃ³n(es) pendiente(s)`);
       }
     }
 
@@ -1477,7 +1487,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`Â¿ConfirmÃ¡s aprobar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1487,7 +1497,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`Â¿ConfirmÃ¡s rechazar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1509,10 +1519,10 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       body: JSON.stringify(body),
     });
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisiÃ³n");
     }
     const status = (resp.status || "").toLowerCase();
-    let okMsg = "Decisión registrada";
+    let okMsg = "DecisiÃ³n registrada";
     if (status === "aprobada") {
       okMsg = "Solicitud aprobada";
     } else if (status === "rechazada") {
@@ -1527,7 +1537,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       await openSolicitudDetail(numericId);
     }
   } catch (err) {
-    toast(err.message || "No se pudo registrar la decisión");
+    toast(err.message || "No se pudo registrar la decisiÃ³n");
   } finally {
     if (triggerBtn) {
       triggerBtn.disabled = false;
@@ -1546,7 +1556,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`Â¿ConfirmÃ¡s aprobar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1559,7 +1569,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`Â¿ConfirmÃ¡s rechazar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1582,10 +1592,10 @@ async function decideCentroRequest(id, action, triggerBtn) {
       body: JSON.stringify(body),
     });
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisiÃ³n");
     }
     const estado = (resp.estado || "").toLowerCase();
-    let okMsg = "Decisión registrada";
+    let okMsg = "DecisiÃ³n registrada";
     if (estado === "aprobado") {
       okMsg = "Solicitud de centros aprobada";
     } else if (estado === "rechazado") {
@@ -1595,7 +1605,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
     const updated = await loadNotificationsSummary();
     renderNotificationsPage(updated);
   } catch (err) {
-    toast(err.message || "No se pudo registrar la decisión");
+    toast(err.message || "No se pudo registrar la decisiÃ³n");
   } finally {
     if (triggerBtn) {
       triggerBtn.disabled = false;
@@ -1661,7 +1671,7 @@ function renderNotificationsPage(data) {
         const header = document.createElement("div");
         header.className = "notification-item-header";
         const createdAt = formatDateTime(notif.created_at);
-        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "Notificación")}</span><time>${createdAt}</time>`;
+        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "NotificaciÃ³n")}</span><time>${createdAt}</time>`;
         node.appendChild(header);
 
         if (notif.solicitud_id) {
@@ -1718,9 +1728,9 @@ function renderNotificationsPage(data) {
         const monto = Number(row.total_monto || 0);
         tr.innerHTML = `
           <td>#${row.id}</td>
-          <td>${escapeHtml(row.centro || "—")}</td>
-          <td>${escapeHtml(row.sector || "—")}</td>
-          <td>${escapeHtml(row.justificacion || "—")}</td>
+          <td>${escapeHtml(row.centro || "â€”")}</td>
+          <td>${escapeHtml(row.sector || "â€”")}</td>
+          <td>${escapeHtml(row.justificacion || "â€”")}</td>
           <td data-sort="${monto}">${formatCurrency(monto)}</td>
           <td data-sort="${row.created_at || ""}">${createdAt}</td>
           <td class="pending-actions">
@@ -1930,7 +1940,7 @@ async function submitRegister() {
   }
 
   if (password.length < 6) {
-    toast("La contraseña debe tener al menos 6 caracteres");
+    toast("La contraseÃ±a debe tener al menos 6 caracteres");
     return;
   }
 
@@ -1939,7 +1949,7 @@ async function submitRegister() {
       method: "POST",
       body: JSON.stringify({ id, password, nombre, apellido, rol }),
     });
-    toast("Usuario registrado ✅. Ahora puede iniciar sesión.", true);
+    toast("Usuario registrado âœ…. Ahora puede iniciar sesiÃ³n.", true);
     closeRegisterModal();
   } catch (err) {
     toast(err.message);
@@ -1954,7 +1964,7 @@ function closeRegisterModal() {
 function recover() {
   const id = $("#id").value.trim();
   if (!id) {
-    toast("Ingrese su ID o email para recuperar la contraseña");
+    toast("Ingrese su ID o email para recuperar la contraseÃ±a");
     return;
   }
   const mailto = `mailto:manuelremon@live.com.ar?subject=Recuperaci%C3%B3n%20de%20contrase%C3%B1a&body=Por%20favor%20asistir%20al%20usuario:%20${encodeURIComponent(id)}`;
@@ -2014,7 +2024,7 @@ async function addItem() {
 
   if (!material) {
     if (!code && !desc) {
-      toast("Buscá un material por código o descripción");
+      toast("BuscÃ¡ un material por cÃ³digo o descripciÃ³n");
       return;
     }
     try {
@@ -2027,7 +2037,7 @@ async function addItem() {
         return;
       }
       if (results.length > 1) {
-        toast("Seleccioná un material de la lista sugerida");
+        toast("SeleccionÃ¡ un material de la lista sugerida");
         if (code) state.cache.set(`codigo:${code.toLowerCase()}`, results);
         if (desc) state.cache.set(`descripcion:${desc.toLowerCase()}`, results);
         showMaterialSuggestions(codeSuggest, results, codeSuggest, descSuggest);
@@ -2042,7 +2052,7 @@ async function addItem() {
   }
 
   if (!material) {
-    toast("Seleccioná un material válido");
+    toast("SeleccionÃ¡ un material vÃ¡lido");
     return;
   }
 
@@ -2075,7 +2085,7 @@ async function recreateDraft(latestDraft, latestUserId) {
   const almacenVirtual =
   latestDraft.header.almacen_virtual || getDefaultAlmacenValue() || "";
   if (!almacenVirtual) {
-    toast("No se pudo determinar el almacén virtual del borrador");
+    toast("No se pudo determinar el almacÃ©n virtual del borrador");
     return null;
   }
   const criticidad = latestDraft.header.criticidad || "Normal";
@@ -2113,7 +2123,7 @@ async function recreateDraft(latestDraft, latestUserId) {
     if (idDisplay) {
       idDisplay.textContent = `#${resp.id}`;
     }
-    toast("Se recreó la solicitud. Intentá nuevamente.", true);
+    toast("Se recreÃ³ la solicitud. IntentÃ¡ nuevamente.", true);
     return resp.id;
   } catch (err) {
     toast(err.message);
@@ -2124,7 +2134,7 @@ async function recreateDraft(latestDraft, latestUserId) {
 async function saveDraft(isRetry = false) {
   const latestDraft = getDraft();
   if (!latestDraft || !latestDraft.header) {
-    toast("No se encontró el encabezado de la solicitud");
+    toast("No se encontrÃ³ el encabezado de la solicitud");
     return;
   }
   const latestUserId = currentUserId();
@@ -2135,7 +2145,7 @@ async function saveDraft(isRetry = false) {
   const almacenVirtual =
   latestDraft.header.almacen_virtual || getDefaultAlmacenValue() || "";
   if (!almacenVirtual) {
-    toast("Seleccioná un almacén virtual en el paso anterior");
+    toast("SeleccionÃ¡ un almacÃ©n virtual en el paso anterior");
     return;
   }
   const criticidad = latestDraft.header.criticidad || "Normal";
@@ -2224,14 +2234,14 @@ function renderSolicitudDetail(detail) {
 
   idEl.textContent = `#${detail.id}`;
   statusEl.innerHTML = statusBadge(detail.status);
-  centroEl.textContent = detail.centro || "—";
-  sectorEl.textContent = detail.sector || "—";
-  centroCostosEl.textContent = detail.centro_costos || "—";
+  centroEl.textContent = detail.centro || "â€”";
+  sectorEl.textContent = detail.sector || "â€”";
+  centroCostosEl.textContent = detail.centro_costos || "â€”";
   if (almacenEl) {
-    almacenEl.textContent = detail.almacen_virtual || "—";
+    almacenEl.textContent = detail.almacen_virtual || "â€”";
   }
   if (criticidadEl) {
-    criticidadEl.textContent = detail.criticidad || "—";
+    criticidadEl.textContent = detail.criticidad || "â€”";
   }
   if (fechaEl) {
     if (detail.fecha_necesidad) {
@@ -2240,18 +2250,18 @@ function renderSolicitudDetail(detail) {
         ? detail.fecha_necesidad
         : fecha.toLocaleDateString();
     } else {
-      fechaEl.textContent = "—";
+      fechaEl.textContent = "â€”";
     }
   }
-  justEl.textContent = detail.justificacion || "—";
-  createdEl.textContent = detail.created_at ? new Date(detail.created_at).toLocaleString() : "—";
-  updatedEl.textContent = detail.updated_at ? new Date(detail.updated_at).toLocaleString() : "—";
+  justEl.textContent = detail.justificacion || "â€”";
+  createdEl.textContent = detail.created_at ? new Date(detail.created_at).toLocaleString() : "â€”";
+  updatedEl.textContent = detail.updated_at ? new Date(detail.updated_at).toLocaleString() : "â€”";
   totalEl.textContent = formatCurrency(detail.total_monto || 0);
   if (aprobadorEl) {
-    aprobadorEl.textContent = detail.aprobador_nombre || "—";
+    aprobadorEl.textContent = detail.aprobador_nombre || "â€”";
   }
   if (planificadorEl) {
-    planificadorEl.textContent = detail.planner_nombre || "—";
+    planificadorEl.textContent = detail.planner_nombre || "â€”";
   }
 
   const cancelRequest = detail.cancel_request || null;
@@ -2259,25 +2269,25 @@ function renderSolicitudDetail(detail) {
   cancelInfo.textContent = "";
   if (detail.status === "cancelada") {
     const reason = detail.cancel_reason ? `Motivo: ${detail.cancel_reason}` : "Sin motivo indicado";
-    const when = detail.cancelled_at ? ` · ${formatDateTime(detail.cancelled_at)}` : "";
+    const when = detail.cancelled_at ? ` Â· ${formatDateTime(detail.cancelled_at)}` : "";
     cancelInfo.textContent = `${reason}${when}`;
     cancelInfo.classList.remove("hide");
   } else if (cancelRequest && cancelRequest.status === "pendiente") {
     const when = cancelRequest.requested_at ? formatDateTime(cancelRequest.requested_at) : "";
     const reason = cancelRequest.reason ? `Motivo: ${cancelRequest.reason}` : "Sin motivo indicado";
-    cancelInfo.textContent = `Cancelación solicitada${when ? ` el ${when}` : ""}. ${reason}. Pendiente de planificador.`;
+    cancelInfo.textContent = `CancelaciÃ³n solicitada${when ? ` el ${when}` : ""}. ${reason}. Pendiente de planificador.`;
     cancelInfo.classList.remove("hide");
   } else if (cancelRequest && cancelRequest.status === "rechazada") {
     const when = cancelRequest.decision_at ? formatDateTime(cancelRequest.decision_at) : "";
     const comment = cancelRequest.decision_comment ? ` Motivo del rechazo: ${cancelRequest.decision_comment}.` : "";
-    cancelInfo.textContent = `Se rechazó la cancelación${when ? ` el ${when}` : ""}.${comment}`;
+    cancelInfo.textContent = `Se rechazÃ³ la cancelaciÃ³n${when ? ` el ${when}` : ""}.${comment}`;
     cancelInfo.classList.remove("hide");
   }
 
   itemsTbody.innerHTML = "";
   if (!detail.items || !detail.items.length) {
     const emptyRow = document.createElement("tr");
-    emptyRow.innerHTML = '<td colspan="6" class="muted">Sin ítems registrados</td>';
+    emptyRow.innerHTML = '<td colspan="6" class="muted">Sin Ã­tems registrados</td>';
     itemsTbody.appendChild(emptyRow);
   } else {
     detail.items.forEach((item) => {
@@ -2285,11 +2295,11 @@ function renderSolicitudDetail(detail) {
       const cantidad = Number(item.cantidad ?? 0);
       const cantidadFmt = Number.isFinite(cantidad)
         ? cantidad.toLocaleString("es-AR")
-        : item.cantidad || "—";
+        : item.cantidad || "â€”";
       tr.innerHTML = `
-        <td>${item.codigo || "—"}</td>
+        <td>${item.codigo || "â€”"}</td>
         <td>${item.descripcion || ""}</td>
-        <td>${item.unidad || "—"}</td>
+        <td>${item.unidad || "â€”"}</td>
         <td>${formatCurrency(item.precio_unitario)}</td>
         <td>${cantidadFmt}</td>
         <td>${formatCurrency(item.subtotal)}</td>
@@ -2307,13 +2317,13 @@ function renderSolicitudDetail(detail) {
       cancelBtn.textContent = "Solicitud cancelada";
     } else if (detail.status === "cancelacion_pendiente") {
       cancelBtn.disabled = true;
-      cancelBtn.textContent = "Cancelación pendiente";
+      cancelBtn.textContent = "CancelaciÃ³n pendiente";
     } else if (detail.status === "draft") {
       cancelBtn.disabled = true;
-      cancelBtn.textContent = "Enviá la solicitud para cancelarla";
+      cancelBtn.textContent = "EnviÃ¡ la solicitud para cancelarla";
     } else {
       cancelBtn.disabled = false;
-      cancelBtn.textContent = "Solicitar cancelación";
+      cancelBtn.textContent = "Solicitar cancelaciÃ³n";
     }
   }
 
@@ -2357,7 +2367,7 @@ function closeSolicitudDetailModal() {
   const cancelBtn = $("#btnRequestCancel");
   if (cancelBtn) {
     cancelBtn.disabled = false;
-    cancelBtn.textContent = "Solicitar cancelación";
+    cancelBtn.textContent = "Solicitar cancelaciÃ³n";
   }
   const editBtn = $("#btnEditDraft");
   if (editBtn) {
@@ -2374,10 +2384,10 @@ async function requestCancelSelectedSolicitud() {
   const detail = state.selectedSolicitud;
   if (!detail) return;
   if (detail.status === "cancelada") {
-    toast("La solicitud ya está cancelada");
+    toast("La solicitud ya estÃ¡ cancelada");
     return;
   }
-  const reason = prompt("Motivo de cancelación (opcional):", detail.cancel_reason || "");
+  const reason = prompt("Motivo de cancelaciÃ³n (opcional):", detail.cancel_reason || "");
   if (reason === null) {
     return;
   }
@@ -2389,7 +2399,7 @@ async function requestCancelSelectedSolicitud() {
       body: JSON.stringify({ reason }),
     });
     if (response?.status === "cancelacion_pendiente") {
-      toast("Cancelación enviada. Pendiente de aprobación del planificador.", true);
+      toast("CancelaciÃ³n enviada. Pendiente de aprobaciÃ³n del planificador.", true);
     } else {
       toast("Solicitud cancelada", true);
     }
@@ -2410,7 +2420,7 @@ async function requestCancelSelectedSolicitud() {
 function resumeDraftFromDetail() {
   const detail = state.selectedSolicitud;
   if (!detail || detail.status !== "draft") {
-    toast("Solo podés editar solicitudes en borrador");
+    toast("Solo podÃ©s editar solicitudes en borrador");
     return;
   }
   const userId = currentUserId();
@@ -2461,7 +2471,7 @@ function showMaterialSuggestions(container, items, codeSuggest, descSuggest) {
   items.forEach((material) => {
     const normalized = normalizeMaterial(material);
     const option = document.createElement("div");
-    option.textContent = `${normalized.codigo} · ${normalized.descripcion}`;
+    option.textContent = `${normalized.codigo} Â· ${normalized.descripcion}`;
     option.onclick = () => {
       if (codeInput) codeInput.value = normalized.codigo;
       if (descInput) descInput.value = normalized.descripcion;
@@ -2529,7 +2539,7 @@ function setupMaterialSearch() {
 function openMaterialDetailModal() {
   const material = state.selected;
   if (!material || !material.descripcion_larga?.trim()) {
-    toast("Seleccioná un material con detalle disponible");
+    toast("SeleccionÃ¡ un material con detalle disponible");
     return;
   }
   const modal = $("#materialDetailModal");
@@ -2538,7 +2548,7 @@ function openMaterialDetailModal() {
   if (!modal || !title || !body) {
     return;
   }
-  title.textContent = `${material.codigo} · ${material.descripcion}`;
+  title.textContent = `${material.codigo} Â· ${material.descripcion}`;
   body.textContent = material.descripcion_larga;
   modal.classList.remove("hide");
 }
@@ -2558,13 +2568,13 @@ function accountSupportMail(subject, bodyLines) {
 
 function requestPasswordChange() {
   if (!state.me) {
-    toast("Iniciá sesión para gestionar tu contraseña");
+    toast("IniciÃ¡ sesiÃ³n para gestionar tu contraseÃ±a");
     return;
   }
   const identifier = state.me.id || state.me.id_spm || "";
-  accountSupportMail("Solicitud de cambio de contraseña SPM", [
+  accountSupportMail("Solicitud de cambio de contraseÃ±a SPM", [
     "Hola equipo SPM,",
-    "Quisiera gestionar un cambio de contraseña.",
+    "Quisiera gestionar un cambio de contraseÃ±a.",
     identifier ? `ID SPM: ${identifier}` : "",
     state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
   ]);
@@ -2572,7 +2582,7 @@ function requestPasswordChange() {
 
 function requestAccountDeletion() {
   if (!state.me) {
-    toast("Iniciá sesión para gestionar tu cuenta");
+    toast("IniciÃ¡ sesiÃ³n para gestionar tu cuenta");
     return;
   }
   const identifier = state.me.id || state.me.id_spm || "";
@@ -2586,17 +2596,17 @@ function requestAccountDeletion() {
 
 async function handleEditPhone() {
   if (!state.me) {
-    toast("Iniciá sesión para gestionar tu teléfono");
+    toast("IniciÃ¡ sesiÃ³n para gestionar tu telÃ©fono");
     return;
   }
   const current = state.me.telefono || "";
-  const nextValue = prompt("Actualizá tu número de contacto", current);
+  const nextValue = prompt("ActualizÃ¡ tu nÃºmero de contacto", current);
   if (nextValue === null) {
     return;
   }
   const trimmed = nextValue.trim();
   if (!trimmed) {
-    toast("Ingresá un teléfono válido");
+    toast("IngresÃ¡ un telÃ©fono vÃ¡lido");
     return;
   }
   try {
@@ -2607,9 +2617,96 @@ async function handleEditPhone() {
     });
     state.me.telefono = resp.telefono || sanitized;
     renderAccountDetails();
-    toast("Teléfono actualizado", true);
+    toast("TelÃ©fono actualizado", true);
   } catch (err) {
     toast(err.message);
+  }
+}
+
+function renderAccountDetails() {
+  const section = document.getElementById("accountDetails");
+  if (!section || !state.me) {
+    return;
+  }
+
+  const user = state.me;
+  const fullName = `${user.nombre || ""} ${user.apellido || ""}`.trim();
+  const centrosList = Array.isArray(user.centros) ? user.centros.join(", ") : (user.centros || "");
+
+  section.innerHTML = `
+    <div class="account-info">
+      <div class="account-section">
+        <h3>InformaciÃ³n Personal</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Nombre completo:</label>
+            <span>${escapeHtml(fullName)}</span>
+          </div>
+          <div class="info-item">
+            <label>Rol:</label>
+            <span>${escapeHtml(user.rol || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>Sector:</label>
+            <span>${escapeHtml(user.sector || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>PosiciÃ³n:</label>
+            <span>${escapeHtml(user.posicion || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>Correo electrÃ³nico:</label>
+            <span>${escapeHtml(user.mail || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>TelÃ©fono:</label>
+            <span id="telefonoDisplay">${escapeHtml(user.telefono || "")}</span>
+            <button type="button" class="btn-link" id="editPhoneBtn" title="Editar telÃ©fono">Editar</button>
+          </div>
+          <div class="info-item">
+            <label>ID Red/ID YPF:</label>
+            <span>${escapeHtml(user.id_red || user.id_ypf || "")}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="account-section">
+        <h3>InformaciÃ³n Organizacional</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Centros asignados:</label>
+            <span>${escapeHtml(centrosList)}</span>
+          </div>
+          <div class="info-item">
+            <label>Jefe directo:</label>
+            <span>${escapeHtml(user.jefe || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>Gerente 1:</label>
+            <span>${escapeHtml(user.gerente1 || "")}</span>
+          </div>
+          <div class="info-item">
+            <label>Gerente 2:</label>
+            <span>${escapeHtml(user.gerente2 || "")}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="account-actions">
+        <button type="button" class="btn sec" id="requestAccountDeletion">Solicitar baja de cuenta</button>
+      </div>
+    </div>
+  `;
+
+  // Add event listeners
+  const editPhoneBtn = document.getElementById("editPhoneBtn");
+  if (editPhoneBtn) {
+    editPhoneBtn.addEventListener("click", handleEditPhone);
+  }
+
+  const deleteBtn = document.getElementById("requestAccountDeletion");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", requestAccountDeletion);
   }
 }
 
@@ -2866,7 +2963,7 @@ async function submitCentersRequest() {
   }
 }
 
-// Funciones para gestión de solicitudes de perfil por administradores
+// Funciones para gestiÃ³n de solicitudes de perfil por administradores
 
 async function loadProfileRequests() {
   try {
@@ -2921,7 +3018,7 @@ function renderProfileRequests(requests) {
         </div>
         ${request.justification ? `
           <div class="justification">
-            <span class="justification-label">Justificación:</span> ${request.justification}
+            <span class="justification-label">JustificaciÃ³n:</span> ${request.justification}
           </div>
         ` : ''}
       </div>
@@ -2941,8 +3038,8 @@ function renderProfileRequests(requests) {
 
 async function processProfileRequest(requestId, action) {
   const confirmMessage = action === 'approve'
-    ? '¿Estás seguro de aprobar esta solicitud?'
-    : '¿Estás seguro de rechazar esta solicitud?';
+    ? 'Â¿EstÃ¡s seguro de aprobar esta solicitud?'
+    : 'Â¿EstÃ¡s seguro de rechazar esta solicitud?';
 
   if (!confirm(confirmMessage)) return;
 
@@ -2964,7 +3061,7 @@ async function processProfileRequest(requestId, action) {
   }
 }
 
-// Inicializar carga de solicitudes cuando se carga la página de administración
+// Inicializar carga de solicitudes cuando se carga la pÃ¡gina de administraciÃ³n
 function initAuthPage() {
   if (authPageInitialized) return;
   const authContainer = document.getElementById("auth");
@@ -3076,7 +3173,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Controlar visibilidad del menú según el rol
+// Controlar visibilidad del menÃº segÃºn el rol
 function updateMenuVisibility() {
   const adminMenuItem = document.getElementById("adminMenuItem");
   const plannerMenuItem = document.getElementById("plannerMenuItem");
@@ -3112,14 +3209,14 @@ function updateMenuVisibility() {
   }
 }
 
-// Llamar a la función cuando se actualiza el estado de las notificaciones
+// Llamar a la funciÃ³n cuando se actualiza el estado de las notificaciones
 const originalRenderNotificationsPage = renderNotificationsPage;
 renderNotificationsPage = function(data) {
   originalRenderNotificationsPage(data);
   updateMenuVisibility();
 };
 
-// ====== SHIMS DE COMPATIBILIDAD (parche rápido) ======
+// ====== SHIMS DE COMPATIBILIDAD (parche rÃ¡pido) ======
 var fmtMoney   = typeof fmtMoney   === "function" ? fmtMoney   : (v) => formatCurrency(v);
 var fmtDateTime= typeof fmtDateTime=== "function" ? fmtDateTime: (v) => formatDateTime(v);
 var fmtNumber  = typeof fmtNumber  === "function" ? fmtNumber  : (v) => {
@@ -3139,7 +3236,7 @@ var toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m)
 var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
 // =====================================================
 
-// Módulo Planificador
+// MÃ³dulo Planificador
 (function initPlanificador() {
   if (!/planificador\.html$/.test(location.pathname)) return;
 
@@ -3158,7 +3255,7 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
   const detMeta = $("#detMeta");
   const tblItems = $("#tblItems tbody");
 
-  // Eventos de filtros y paginación
+  // Eventos de filtros y paginaciÃ³n
   $("#frmFilters").addEventListener("submit", (e)=>{ e.preventDefault(); state.pageMias=0; state.pagePend=0; loadQueues(); });
   $("#btnLimpiar").addEventListener("click", ()=>{ /* limpia inputs y reload */ loadQueues(); });
   $("#pgPrevMias").onclick = ()=>{ state.pageMias = Math.max(0, state.pageMias-1); loadQueues({only:"mias"}); };
@@ -3247,7 +3344,7 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
   function renderMeta(s) {
     return `
       <div><b>Centro:</b> ${esc(s.centro)} | <b>Sector:</b> ${esc(s.sector)} | <b>Criticidad:</b> ${esc(s.criticidad || "-")}</div>
-      <div><b>Justificación:</b> ${esc(s.justificacion || "-")}</div>
+      <div><b>JustificaciÃ³n:</b> ${esc(s.justificacion || "-")}</div>
       <div><b>Total estimado:</b> <span id="detTotal">${fmtMoney(s.total_monto || 0)}</span></div>
     `;
   }
@@ -3323,11 +3420,19 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
     `).join("");
 
     // Bind events
-    container.querySelectorAll(".ai-suggestion__apply").forEach(btn => {
-      btn.onclick = () => applyAISuggestion(btn.dataset.type, JSON.parse(btn.dataset.payload), Number(btn.dataset.itemIndex));
+    container.querySelectorAll(".ai-suggestion__apply").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyAISuggestion(
+          btn.dataset.type,
+          JSON.parse(btn.dataset.payload),
+          Number(btn.dataset.itemIndex)
+        );
+      });
     });
-    container.querySelectorAll(".ai-suggestion__reject").forEach(btn => {
-      btn.onclick = () => rejectAISuggestion(btn.dataset.type, Number(btn.dataset.itemIndex));
+    container.querySelectorAll(".ai-suggestion__reject").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        rejectAISuggestion(btn.dataset.type, Number(btn.dataset.itemIndex), ev);
+      });
     });
   }
 
@@ -3352,7 +3457,7 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
     }
   }
 
-  async function rejectAISuggestion(type, itemIndex) {
+  async function rejectAISuggestion(type, itemIndex, ev) {
     const id = state.detalle.id;
     try {
       await api("/ai/suggest/reject", {
@@ -3361,7 +3466,7 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
       });
       toastOk("Sugerencia descartada");
       // Remove from UI
-      const suggestion = event.target.closest(".ai-suggestion");
+      const suggestion = ev?.currentTarget?.closest(".ai-suggestion");
       if (suggestion) suggestion.remove();
     } catch (err) {
       toastErr(err);
@@ -3380,84 +3485,164 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
   }
 
   async function saveItems() {
-    const id = state.detalle.id;
+    const id = state.detalle?.id;
+    if (!id) return;
     const items = [];
     state.detalle.dirty.forEach(idx=>{
       const tr = tblItems.querySelector(`tr[data-index="${idx}"]`);
+      if (!tr) return;
+      const cantidad = Number(tr.querySelector(".cantAprob")?.value);
+      const precio = Number(tr.querySelector(".precioEst")?.value);
       items.push({
         item_index: idx,
-        decision: tr.querySelector(".decision").value,
-        cantidad_aprobada: Number(tr.querySelector(".cantAprob").value),
-        codigo_equivalente: tr.querySelector(".eqvCodigo").value.trim() || null,
-        proveedor_sugerido: tr.querySelector(".proveedor").value.trim() || null,
-        precio_unitario_estimado: Number(tr.querySelector(".precioEst").value || 0),
-        comentario: tr.querySelector(".comentario").value.trim() || null
+        decision: tr.querySelector(".decision")?.value || "stock",
+        cantidad_aprobada: Number.isFinite(cantidad) ? cantidad : 0,
+        codigo_equivalente: tr.querySelector(".eqvCodigo")?.value?.trim() || null,
+        proveedor_sugerido: tr.querySelector(".proveedor")?.value?.trim() || null,
+        precio_unitario_estimado: Number.isFinite(precio) ? precio : null,
+        comentario: tr.querySelector(".comentario")?.value?.trim() || "",
       });
     });
-    if (!items.length) { toastInfo("No hay cambios"); return; }
-    await api(`/planificador/solicitudes/${id}/tratamiento/items`, {
-      method:"PATCH",
-      body: JSON.stringify({ items })
-    });
-    state.detalle.dirty.clear();
-    toastOk("Cambios guardados");
+    if (!items.length) {
+      toastInfo("No hay cambios para guardar");
+      return;
+    }
+    try {
+      await api(`/planificador/solicitudes/${id}/items`, {
+        method: "PATCH",
+        body: JSON.stringify({ items }),
+      });
+      state.detalle.dirty.clear();
+      toastOk("Cambios guardados");
+      await openDetalle(id);
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo guardar";
+    }
   }
 
   async function finalizar() {
-    const id = state.detalle.id;
-    if (!confirm("¿Finalizar tratamiento?")) return;
-    await api(`/planificador/solicitudes/${id}/finalizar`, { method:"POST" });
-    dlg.classList.add("hide");
-    await loadQueues();
+    const id = state.detalle?.id;
+    if (!id) return;
+    try {
+      await api(`/planificador/solicitudes/${id}/finalizar`, { method: "POST" });
+      toastOk("Solicitud finalizada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+      await loadStats();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo finalizar";
+    }
   }
 
   async function rechazar() {
-    const id = state.detalle.id;
-    const motivo = prompt("Motivo de rechazo (3..500 caracteres):") || "";
-    if (motivo.trim().length < 3) return;
-    await api(`/planificador/solicitudes/${id}/rechazar`, {
-      method:"POST",
-      body: JSON.stringify({ motivo })
-    });
-    dlg.classList.add("hide");
-    await loadQueues();
+    const id = state.detalle?.id;
+    if (!id) return;
+    const motivo = window.prompt("Indicar motivo del rechazo");
+    if (!motivo || motivo.trim().length < 3) {
+      toastInfo("Motivo demasiado corto");
+      return;
+    }
+    try {
+      await api(`/planificador/solicitudes/${id}/rechazar`, {
+        method: "POST",
+        body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      toastOk("Solicitud rechazada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+      await loadStats();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo rechazar";
+    }
   }
 
   async function liberar() {
-    const id = state.detalle.id;
-    await api(`/planificador/solicitudes/${id}/liberar`, { method:"PATCH" });
-    dlg.classList.add("hide");
-    await loadQueues();
+    const id = state.detalle?.id;
+    if (!id) return;
+    try {
+      await api(`/planificador/solicitudes/${id}/liberar`, { method: "PATCH" });
+      toastOk("Solicitud liberada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo liberar";
+    }
   }
 
-  // Estadísticas
-  $("#frmStats").addEventListener("submit", async (e)=>{
-    e.preventDefault();
-    await loadStats();
-  });
+  const statsCards = $("#statsCards");
+  const statsTableBody = document.querySelector("#tblTopCentros tbody");
+  const statsForm = $("#frmStats");
+
+  function renderStats(data) {
+    const kpis = data?.kpis || {};
+    if (statsCards) {
+      statsCards.innerHTML = `
+        <article class="card">
+          <h4>En tratamiento</h4>
+          <p>${kpis.en_tratamiento ?? 0}</p>
+        </article>
+        <article class="card">
+          <h4>Finalizadas</h4>
+          <p>${kpis.finalizadas ?? 0}</p>
+        </article>
+        <article class="card">
+          <h4>Rechazadas</h4>
+          <p>${kpis.rechazadas ?? 0}</p>
+        </article>
+      `;
+    }
+    if (statsTableBody) {
+      const rows = Array.isArray(data?.top_centros) ? data.top_centros : [];
+      statsTableBody.innerHTML = rows.length
+        ? rows.map((row) => `
+            <tr>
+              <td>${esc(row.centro)}</td>
+              <td>${row.count ?? 0}</td>
+              <td class="num">${fmtMoney(row.monto ?? 0)}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="3">Sin datos</td></tr>`;
+    }
+  }
 
   async function loadStats() {
-    const qs = new URLSearchParams({
-      desde: $("#sDesde").value || "",
-      hasta: $("#sHasta").value || ""
+    if (!statsCards && !statsTableBody) return;
+    const desde = $("#sDesde")?.value || "";
+    const hasta = $("#sHasta")?.value || "";
+    const params = new URLSearchParams();
+    if (desde) params.set("desde", desde);
+    if (hasta) params.set("hasta", hasta);
+    try {
+      const data = await api(`/planificador/estadisticas?${params.toString()}`);
+      if (data?.ok === false) {
+        throw new Error(data?.error?.message || "No se pudieron cargar las estadisticas");
+      }
+      renderStats(data);
+    } catch (err) {
+      toastErr(err);
+      if (statsCards) {
+        statsCards.innerHTML = `<article class="card error">No se pudieron cargar las estadisticas</article>`;
+      }
+    }
+  }
+
+  if (statsForm) {
+    statsForm.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      loadStats();
     });
-    const data = await api(`/planificador/estadisticas?${qs.toString()}`);
-    renderStats(data);
   }
 
-  function renderStats(d) {
-    $("#statsCards").innerHTML = `
-      <div class="card"><div class="k">En tratamiento</div><div class="v">${d.kpis.en_tratamiento}</div></div>
-      <div class="card"><div class="k">Finalizadas</div><div class="v">${d.kpis.finalizadas}</div></div>
-      <div class="card"><div class="k">Rechazadas</div><div class="v">${d.kpis.rechazadas}</div></div>
-      <div class="card"><div class="k">Tiempo prom. (h)</div><div class="v">${fmtNumber(d.kpis.t_hrs_promedio)}</div></div>
-    `;
-    $("#tblTopCentros tbody").innerHTML = d.top_centros.map(c=>`
-      <tr><td>${esc(c.centro)}</td><td class="num">${c.count}</td><td class="num">${fmtMoney(c.monto)}</td></tr>
-    `).join("");
-  }
-
-  // init
   loadQueues();
   loadStats();
+  updateMenuVisibility();
 })();
+
+
