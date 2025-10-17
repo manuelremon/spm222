@@ -676,6 +676,8 @@ function updateSortIndicators(table, state) {
   });
 }
 
+let simulatedRole = localStorage.getItem('simulatedRole');
+
 function trimChatHistory() {
   const max = CHAT_HISTORY_LIMIT * 2;
   if (state.chat.messages.length > max) {
@@ -3224,8 +3226,6 @@ var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) 
             await openDetalle(id);
           } else if (action==="liberar") {
             await api(`/planificador/solicitudes/${id}/liberar`, {method:"PATCH"});
-            await loadQueues({only:"mias"});
-          } else if (action==="ver") {
             await openDetalle(id);
           }
         } catch (err) { toastErr(err); }
