@@ -3050,12 +3050,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const userNameNode = document.getElementById("userName");
         if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
-        finalizePage();
       }
 
       if (currentPage === "admin-solicitudes.html") {
         loadProfileRequests();
       }
+
+      finalizePage();
     }).catch(() => {
       window.location.href = "index.html";
     });
