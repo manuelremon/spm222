@@ -1,4 +1,3 @@
-// Calcula la URL base del backend. Preferimos hablar con el mismo origen
 // para evitar problemas de CSP/CORS cuando se sirve tras Nginx.
 window.addEventListener('error', (e) => {
   const box = document.createElement('div');
@@ -8,6 +7,10 @@ window.addEventListener('error', (e) => {
   });
   box.textContent = 'JS error: ' + (e?.error?.stack || e.message || e.toString());
   document.body.appendChild(box);
+});
+// Asegura que el contenido sea visible al cargar la página
+window.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add('is-ready');
 });
 const API = (function () {
   if (location.protocol === "file:") {
