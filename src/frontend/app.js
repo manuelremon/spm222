@@ -8,7 +8,7 @@ window.addEventListener('error', (e) => {
   box.textContent = 'JS error: ' + (e?.error?.stack || e.message || e.toString());
   document.body.appendChild(box);
 });
-// Asegura que el contenido sea visible al cargar la pÃ¡gina
+// Asegura que el contenido sea visible al cargar la página
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('is-ready');
 });
@@ -1070,12 +1070,12 @@ const STATUS_LABELS = {
   draft: "Borrador",
   finalizada: "Finalizada",
   cancelada: "Cancelada",
-  pendiente_de_aprobacion: "pendiente de aprobaciÃ³n",
+  pendiente_de_aprobacion: "pendiente de aprobación",
   pendiente: "pendiente",
   aprobada: "Aprobada",
   rechazada: "Rechazada",
-  cancelacion_pendiente: "CancelaciÃ³n pendiente",
-  cancelacion_rechazada: "CancelaciÃ³n rechazada",
+  cancelacion_pendiente: "Cancelación pendiente",
+  cancelacion_rechazada: "Cancelación rechazada",
 };
 
 const PENDING_SOLICITUD_KEY = "pendingSolicitudId";
@@ -1142,11 +1142,6 @@ function applyThemePreference(mode) {
 function applyDensityPreference(density) {
   if (!document.body) return;
   document.body.dataset.density = density || DEFAULT_PREFERENCES.density;
-}
-
-function applyEffectsPreference(enabled) {
-  if (!document.body) return;
-  document.body.dataset.effects = enabled === false ? "off" : "on";
 }
 
 function updateKeyboardShortcutsPreference(enabled) {
@@ -1329,9 +1324,9 @@ function statusBadge(status) {
 const DEFAULT_CENTROS = ["1008", "1050", "1500"];
 
 const DEFAULT_ALMACENES_VIRTUALES = [
-  { id: "AV-CENTRAL", label: "AV-CENTRAL - AlmacÃ©n Central" },
-  { id: "AV-MANT", label: "AV-MANT - DepÃ³sito de Mantenimiento" },
-  { id: "AV-REP", label: "AV-REP - Repuestos CrÃ­ticos" },
+  { id: "AV-CENTRAL", label: "AV-CENTRAL - Almacén Central" },
+  { id: "AV-MANT", label: "AV-MANT - Depósito de Mantenimiento" },
+  { id: "AV-REP", label: "AV-REP - Repuestos Críticos" },
   { id: "AV-SERV", label: "AV-SERV - Servicios Industriales" },
 ];
 
@@ -1354,8 +1349,8 @@ const ADMIN_CONFIG_TABLE_FIELDS = {
 };
 
 const ADMIN_CONFIG_LABELS = {
-  centros: "centro logÃ­stico",
-  almacenes: "almacÃ©n virtual",
+  centros: "centro logístico",
+  almacenes: "almacén virtual",
   roles: "rol",
   puestos: "puesto",
   sectores: "sector",
@@ -1426,31 +1421,31 @@ async function loadCatalogData(resource = null, { silent = false, includeInactiv
       const endpoint = params.size ? `/catalogos/${resource}?${params.toString()}` : `/catalogos/${resource}`;
       const resp = await api(endpoint);
       if (!resp?.ok) {
-        throw new Error(resp?.error?.message || "No se pudo cargar el catÃ¡logo");
+        throw new Error(resp?.error?.message || "No se pudo cargar el catálogo");
       }
       setCatalogItems(resource, resp.items || []);
       if (!silent) {
-        toast(`CatÃ¡logo de ${adminConfigLabel(resource)} actualizado`, true);
+        toast(`Catálogo de ${adminConfigLabel(resource)} actualizado`, true);
       }
       return resp.items || [];
     }
     const endpoint = params.size ? `/catalogos?${params.toString()}` : "/catalogos";
     const resp = await api(endpoint);
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo cargar la configuraciÃ³n");
+      throw new Error(resp?.error?.message || "No se pudo cargar la configuración");
     }
     const normalized = ensureCatalogDefaults(resp.data || {});
     CATALOG_KEYS.forEach((key) => {
       setCatalogItems(key, normalized[key]);
     });
     if (!silent) {
-      toast("CatÃ¡logos sincronizados", true);
+      toast("Catálogos sincronizados", true);
     }
     return normalized;
   } catch (err) {
     console.error(err);
     if (!silent) {
-      toast(err.message || "No se pudieron cargar los catÃ¡logos");
+      toast(err.message || "No se pudieron cargar los catálogos");
     }
     return null;
   }
@@ -1533,6 +1528,113 @@ function getDefaultCentroValue() {
 function getDefaultAlmacenValue() {
   const options = buildAlmacenOptions();
   return options[0]?.value || DEFAULT_ALMACENES_VIRTUALES[0]?.id || "";
+}
+
+function populateCentroSelect() {
+  const select = document.getElementById("centro");
+  if (!select) return;
+  const options = buildCentroOptions();
+  renderSelectOptions(select, options, { placeholder: "Seleccioná un centro" });
+}
+
+function populateAlmacenSelect() {
+  const select = document.getElementById("almacenVirtual");
+  if (!select) return;
+  const options = buildAlmacenOptions();
+  renderSelectOptions(select, options, { placeholder: "Seleccioná un almacén" });
+}
+
+async function initCreateSolicitudPage() {
+  await loadCatalogData();
+  populateCentroSelect();
+  populateAlmacenSelect();
+
+  // Event listener for "Continuar" button
+  const btnContinuar = document.getElementById("btnContinuar");
+  if (btnContinuar) {
+    btnContinuar.addEventListener("click", () => {
+      // Collect form data
+      const centro = document.getElementById("centro")?.value;
+      const almacenVirtual = document.getElementById("almacenVirtual")?.value;
+      const centroDeCostos = document.getElementById("centroDeCostos")?.value;
+      const criticidad = document.getElementById("criticidad")?.value;
+      const fechaNecesidad = document.getElementById("fechaNecesidad")?.value;
+      const sector = document.getElementById("sector")?.value || state.me?.sector;
+      const just = document.getElementById("just")?.value;
+
+      // Basic validation
+      if (!centro || !almacenVirtual || !just.trim()) {
+        toast("Completá los campos obligatorios: Centro, Almacén y Justificación");
+        return;
+      }
+
+      // Save to draft
+      updateDraftHeader({
+        centro,
+        almacen_virtual: almacenVirtual,
+        centro_costos: centroDeCostos,
+        criticidad,
+        fecha_necesidad: fechaNecesidad,
+        sector,
+        justificacion: just,
+      });
+
+      // Navigate to add materials page
+      window.location.href = "agregar-materiales.html";
+    });
+  }
+}
+
+async function initAddMaterialsPage() {
+  // Load draft
+  const draft = getDraft();
+  if (draft) {
+    state.items = draft.items || [];
+  } else {
+    state.items = [];
+  }
+
+  // Display solicitud ID
+  const idDisplay = $("#solicitudIdDisplay");
+  if (idDisplay) {
+    idDisplay.textContent = draft?.id ? `#${draft.id}` : "Borrador";
+  }
+
+  // Render cart
+  renderCart(state.items);
+
+  // Setup material search
+  setupMaterialSearch();
+
+  // Setup event listeners
+  const btnAdd = $("#btnAdd");
+  if (btnAdd) {
+    btnAdd.addEventListener("click", addItem);
+  }
+
+  const btnSaveDraft = $("#btnSaveDraft");
+  if (btnSaveDraft) {
+    btnSaveDraft.addEventListener("click", () => saveDraft());
+  }
+
+  const btnSend = $("#btnSend");
+  if (btnSend) {
+    btnSend.addEventListener("click", () => sendSolicitud());
+  }
+
+  const btnShowMaterialDetail = $("#btnShowMaterialDetail");
+  if (btnShowMaterialDetail) {
+    btnShowMaterialDetail.addEventListener("click", openMaterialDetailModal);
+  }
+
+  // Event listener for modal close
+  const materialDetailClose = $("#materialDetailClose");
+  if (materialDetailClose) {
+    materialDetailClose.addEventListener("click", () => {
+      const modal = $("#materialDetailModal");
+      if (modal) hide(modal);
+    });
+  }
 }
 
 function renderSelectOptions(select, options, { placeholder = "Seleccioná una opción", value = "" } = {}) {
@@ -1755,7 +1857,7 @@ async function loadNotificationsSummary(options = {}) {
     if (state.notifications.unread > 0 && !options.markAsRead) {
       const latestUnread = state.notifications.items.find(item => !item.leido);
       if (latestUnread) {
-        showNotificationPopup(`Tienes ${state.notifications.unread} notificaciÃ³n(es) pendiente(s)`);
+        showNotificationPopup(`Tienes ${state.notifications.unread} notificación(es) pendiente(s)`);
       }
     }
 
@@ -1838,7 +1940,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`Â?ConfirmÃ¡s aprobar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1848,7 +1950,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`Â?ConfirmÃ¡s rechazar la solicitud #${numericId}?`);
+    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1870,10 +1972,10 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       body: JSON.stringify(body),
     });
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo registrar la decisiÃ³n");
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
     }
     const status = (resp.status || "").toLowerCase();
-    let okMsg = "DecisiÃ³n registrada";
+    let okMsg = "Decisión registrada";
     if (status === "aprobada") {
       okMsg = "Solicitud aprobada";
     } else if (status === "rechazada") {
@@ -1888,7 +1990,7 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
       await openSolicitudDetail(numericId);
     }
   } catch (err) {
-    toast(err.message || "No se pudo registrar la decisiÃ³n");
+    toast(err.message || "No se pudo registrar la decisión");
   } finally {
     if (triggerBtn) {
       triggerBtn.disabled = false;
@@ -1907,7 +2009,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
 
   let comentario = null;
   if (action === "aprobar") {
-    const confirmed = window.confirm(`Â?ConfirmÃ¡s aprobar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1920,7 +2022,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
       return;
     }
     comentario = reason.trim() || null;
-    const confirmed = window.confirm(`Â?ConfirmÃ¡s rechazar la solicitud de centros #${numericId}?`);
+    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud de centros #${numericId}?`);
     if (!confirmed) {
       return;
     }
@@ -1943,10 +2045,10 @@ async function decideCentroRequest(id, action, triggerBtn) {
       body: JSON.stringify(body),
     });
     if (!resp?.ok) {
-      throw new Error(resp?.error?.message || "No se pudo registrar la decisiÃ³n");
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
     }
     const estado = (resp.estado || "").toLowerCase();
-    let okMsg = "DecisiÃ³n registrada";
+    let okMsg = "Decisión registrada";
     if (estado === "aprobado") {
       okMsg = "Solicitud de centros aprobada";
     } else if (estado === "rechazado") {
@@ -1956,7 +2058,7 @@ async function decideCentroRequest(id, action, triggerBtn) {
     const updated = await loadNotificationsSummary();
     renderNotificationsPage(updated);
   } catch (err) {
-    toast(err.message || "No se pudo registrar la decisiÃ³n");
+    toast(err.message || "No se pudo registrar la decisión");
   } finally {
     if (triggerBtn) {
       triggerBtn.disabled = false;
@@ -2022,7 +2124,7 @@ function renderNotificationsPage(data) {
         const header = document.createElement("div");
         header.className = "notification-item-header";
         const createdAt = formatDateTime(notif.created_at);
-        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "NotificaciÃ³n")}</span><time>${createdAt}</time>`;
+        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "Notificación")}</span><time>${createdAt}</time>`;
         node.appendChild(header);
 
         if (notif.solicitud_id) {
@@ -2316,7 +2418,7 @@ async function submitRegister() {
   }
 
   if (password.length < 6) {
-    toast("La contraseÃ±a debe tener al menos 6 caracteres");
+    toast("La contraseña debe tener al menos 6 caracteres");
     return;
   }
 
@@ -2325,7 +2427,7 @@ async function submitRegister() {
       method: "POST",
       body: JSON.stringify({ id, password, nombre, apellido, rol }),
     });
-    toast("Usuario registrado âœ…. Ahora puede iniciar sesiÃ³n.", true);
+    toast("Usuario registrado. Ahora puede iniciar sesión.", true);
     closeRegisterModal();
   } catch (err) {
     toast(err.message);
@@ -2340,7 +2442,7 @@ function closeRegisterModal() {
 function recover() {
   const id = $("#id").value.trim();
   if (!id) {
-    toast("Ingrese su ID o email para recuperar la contraseÃ±a");
+    toast("Ingrese su ID o email para recuperar la contraseña");
     return;
   }
   const mailto = `mailto:manuelremon@live.com.ar?subject=Recuperaci%C3%B3n%20de%20contrase%C3%B1a&body=Por%20favor%20asistir%20al%20usuario:%20${encodeURIComponent(id)}`;
@@ -2400,7 +2502,7 @@ async function addItem() {
 
   if (!material) {
     if (!code && !desc) {
-      toast("BuscÃ¡ un material por cÃ³digo o descripciÃ³n");
+      toast("Buscá un material por código o descripción");
       return;
     }
     try {
@@ -2413,7 +2515,7 @@ async function addItem() {
         return;
       }
       if (results.length > 1) {
-        toast("SeleccionÃ¡ un material de la lista sugerida");
+        toast("Seleccioná un material de la lista sugerida");
         if (code) state.cache.set(`codigo:${code.toLowerCase()}`, results);
         if (desc) state.cache.set(`descripcion:${desc.toLowerCase()}`, results);
         showMaterialSuggestions(codeSuggest, results, codeSuggest, descSuggest);
@@ -2428,7 +2530,7 @@ async function addItem() {
   }
 
   if (!material) {
-    toast("SeleccionÃ¡ un material vÃ¡lido");
+    toast("Seleccioná un material válido");
     return;
   }
 
@@ -2461,7 +2563,7 @@ async function recreateDraft(latestDraft, latestUserId) {
   const almacenVirtual =
   latestDraft.header.almacen_virtual || getDefaultAlmacenValue() || "";
   if (!almacenVirtual) {
-    toast("No se pudo determinar el almacÃ©n virtual del borrador");
+    toast("No se pudo determinar el almacén virtual del borrador");
     return null;
   }
   const criticidad = latestDraft.header.criticidad || "Normal";
@@ -2499,7 +2601,7 @@ async function recreateDraft(latestDraft, latestUserId) {
     if (idDisplay) {
       idDisplay.textContent = `#${resp.id}`;
     }
-    toast("Se recreÃ³ la solicitud. IntentÃ¡ nuevamente.", true);
+    toast("Se recreó la solicitud. Intentá nuevamente.", true);
     return resp.id;
   } catch (err) {
     toast(err.message);
@@ -2510,7 +2612,7 @@ async function recreateDraft(latestDraft, latestUserId) {
 async function saveDraft(isRetry = false) {
   const latestDraft = getDraft();
   if (!latestDraft || !latestDraft.header) {
-    toast("No se encontrÃ³ el encabezado de la solicitud");
+    toast("No se encontró el encabezado de la solicitud");
     return;
   }
   const latestUserId = currentUserId();
@@ -2521,7 +2623,7 @@ async function saveDraft(isRetry = false) {
   const almacenVirtual =
   latestDraft.header.almacen_virtual || getDefaultAlmacenValue() || "";
   if (!almacenVirtual) {
-    toast("SeleccionÃ¡ un almacÃ©n virtual en el paso anterior");
+    toast("Seleccioná un almacén virtual en el paso anterior");
     return;
   }
   const criticidad = latestDraft.header.criticidad || "Normal";
@@ -2578,14 +2680,65 @@ async function saveDraft(isRetry = false) {
   }
 }
 
-async function refresh() {
+async function sendSolicitud() {
+  const latestDraft = getDraft();
+  if (!latestDraft || !latestDraft.header) {
+    toast("No se encontró el encabezado de la solicitud");
+    return;
+  }
+  if (!state.items || !state.items.length) {
+    toast("Agregá al menos un material a la solicitud");
+    return;
+  }
+  const latestUserId = currentUserId();
+  if (!latestUserId) {
+    toast("No se pudo identificar al usuario actual");
+    return;
+  }
+  const almacenVirtual =
+    latestDraft.header.almacen_virtual || getDefaultAlmacenValue() || "";
+  if (!almacenVirtual) {
+    toast("Seleccioná un almacén virtual en el paso anterior");
+    return;
+  }
+  const criticidad = latestDraft.header.criticidad || "Normal";
+  const fechaNecesidad =
+    latestDraft.header.fecha_necesidad || new Date().toISOString().split("T")[0];
+  const payloadItems = state.items.map((item) => ({
+    codigo: item.codigo,
+    descripcion: item.descripcion,
+    cantidad: Math.max(1, Number(item.cantidad) || 1),
+    precio_unitario: Number(item.precio ?? 0),
+    unidad: item.unidad || "",
+  }));
+  const body = {
+    id_usuario: latestUserId,
+    centro: latestDraft.header.centro,
+    sector: latestDraft.header.sector,
+    justificacion: latestDraft.header.justificacion,
+    centro_costos: latestDraft.header.centro_costos,
+    almacen_virtual: almacenVirtual,
+    criticidad,
+    fecha_necesidad: fechaNecesidad,
+    items: payloadItems,
+  };
+  const btn = $("#btnSend");
+  if (btn) btn.disabled = true;
   try {
-    const resp = await api("/solicitudes");
-    renderList(resp);
-    return resp;
+    const resp = await api("/solicitudes", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    // Clear draft
+    sessionStorage.removeItem("solicitudDraft");
+    state.items = [];
+    toast("Solicitud enviada correctamente", true);
+    // Redirect to home or mis-solicitudes
+    window.location.href = "mis-solicitudes.html";
   } catch (err) {
     toast(err.message);
-    return null;
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -2651,19 +2804,19 @@ function renderSolicitudDetail(detail) {
   } else if (cancelRequest && cancelRequest.status === "pendiente") {
     const when = cancelRequest.requested_at ? formatDateTime(cancelRequest.requested_at) : "";
     const reason = cancelRequest.reason ? `Motivo: ${cancelRequest.reason}` : "Sin motivo indicado";
-    cancelInfo.textContent = `CancelaciÃ³n solicitada${when ? ` el ${when}` : ""}. ${reason}. pendiente de planificador.`;
+    cancelInfo.textContent = `Cancelación solicitada${when ? ` el ${when}` : ""}. ${reason}. pendiente de planificador.`;
     cancelInfo.classList.remove("hide");
   } else if (cancelRequest && cancelRequest.status === "rechazada") {
     const when = cancelRequest.decision_at ? formatDateTime(cancelRequest.decision_at) : "";
     const comment = cancelRequest.decision_comment ? ` Motivo del rechazo: ${cancelRequest.decision_comment}.` : "";
-    cancelInfo.textContent = `Se rechazÃ³ la cancelaciÃ³n${when ? ` el ${when}` : ""}.${comment}`;
+    cancelInfo.textContent = `Se rechazó la cancelación${when ? ` el ${when}` : ""}.${comment}`;
     cancelInfo.classList.remove("hide");
   }
 
   itemsTbody.innerHTML = "";
   if (!detail.items || !detail.items.length) {
     const emptyRow = document.createElement("tr");
-    emptyRow.innerHTML = '<td colspan="6" class="muted">Sin Ã­tems registrados</td>';
+    emptyRow.innerHTML = '<td colspan="6" class="muted">Sin ítems registrados</td>';
     itemsTbody.appendChild(emptyRow);
   } else {
     detail.items.forEach((item) => {
@@ -2693,13 +2846,13 @@ function renderSolicitudDetail(detail) {
       cancelBtn.textContent = "Solicitud cancelada";
     } else if (detail.status === "cancelacion_pendiente") {
       cancelBtn.disabled = true;
-      cancelBtn.textContent = "CancelaciÃ³n pendiente";
+      cancelBtn.textContent = "Cancelación pendiente";
     } else if (detail.status === "draft") {
       cancelBtn.disabled = true;
-      cancelBtn.textContent = "EnviÃ¡ la solicitud para cancelarla";
+      cancelBtn.textContent = "Envía la solicitud para cancelarla";
     } else {
       cancelBtn.disabled = false;
-      cancelBtn.textContent = "Solicitar cancelaciÃ³n";
+      cancelBtn.textContent = "Solicitar cancelación";
     }
   }
 
@@ -2743,7 +2896,7 @@ function closeSolicitudDetailModal() {
   const cancelBtn = $("#btnRequestCancel");
   if (cancelBtn) {
     cancelBtn.disabled = false;
-    cancelBtn.textContent = "Solicitar cancelaciÃ³n";
+    cancelBtn.textContent = "Solicitar cancelación";
   }
   const editBtn = $("#btnEditDraft");
   if (editBtn) {
@@ -2760,10 +2913,10 @@ async function requestCancelSelectedSolicitud() {
   const detail = state.selectedSolicitud;
   if (!detail) return;
   if (detail.status === "cancelada") {
-    toast("La solicitud ya estÃ¡ cancelada");
+    toast("La solicitud ya está cancelada");
     return;
   }
-  const reason = prompt("Motivo de cancelaciÃ³n (opcional):", detail.cancel_reason || "");
+  const reason = prompt("Motivo de cancelación (opcional):", detail.cancel_reason || "");
   if (reason === null) {
     return;
   }
@@ -2915,7 +3068,7 @@ function setupMaterialSearch() {
 function openMaterialDetailModal() {
   const material = state.selected;
   if (!material || !material.descripcion_larga?.trim()) {
-    toast("SeleccionÃ¡ un material con detalle disponible");
+    toast("Seleccioná un material con detalle disponible");
     return;
   }
   const modal = $("#materialDetailModal");
@@ -3524,8 +3677,8 @@ function renderProfileRequests(requests) {
 
 async function processProfileRequest(requestId, action) {
   const confirmMessage = action === 'approve'
-    ? 'Â?EstÃ¡s seguro de aprobar esta solicitud?'
-    : 'Â?EstÃ¡s seguro de rechazar esta solicitud?';
+    ? '¿Estás seguro de aprobar esta solicitud?'
+    : '¿Estás seguro de rechazar esta solicitud?';
 
   if (!confirm(confirmMessage)) return;
 
@@ -3547,7 +3700,7 @@ async function processProfileRequest(requestId, action) {
   }
 }
 
-// Inicializar carga de solicitudes cuando se carga la pÃ¡gina de administraciÃ³n
+// Inicializar carga de solicitudes cuando se carga la página de administración
 function initAuthPage() {
   if (authPageInitialized) return;
   const authContainer = document.getElementById("auth");
@@ -3664,6 +3817,15 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
           console.error(error);
           toast(error?.message || "No se pudo inicializar el formulario de solicitud");
+        }
+      }
+
+      if (currentPage === "agregar-materiales.html") {
+        try {
+          await initAddMaterialsPage();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudo inicializar la página de agregar materiales");
         }
       }
 
