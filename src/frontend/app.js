@@ -1063,7 +1063,10 @@ function initSystemConsole() {
   render();
   const intervalId = window.setInterval(render, 60000);
   consoleNode.dataset.intervalId = String(intervalId);
-  consoleNode.classList.remove("hide");
+  // Solo mostrar la consola si el usuario es admin
+  if (typeof state.me?.rol === "string" && (state.me.rol.toLowerCase().includes("admin") || state.me.rol.toLowerCase().includes("administrador"))) {
+    consoleNode.classList.remove("hide");
+  }
 }
 
 const STATUS_LABELS = {
@@ -2457,7 +2460,9 @@ function help() {
 async function me() {
   try {
     const resp = await api("/me");
+    console.log("API /me response:", resp);
     state.me = resp.usuario;
+    console.log("state.me set to:", state.me);
     updateMenuVisibility();
     if (state.me) {
       state.me.centros = parseCentrosList(state.me.centros);
@@ -3134,61 +3139,37 @@ const ACCOUNT_FIELD_CONFIG = [
   { key: "gerente2", label: "Gerente 2", admin: true },
 ];
 
-async function handleEditPhone() {
+async function submitPhoneChange(value) {
   if (!state.me) {
-    toast("Inicia sesion para gestionar tu telefono");
-    return;
+    throw new Error("Inicia sesion para gestionar tu telefono");
   }
-  const current = state.me.telefono || "";
-  const nextValue = prompt("Actualiza tu numero de contacto", current);
-  if (nextValue === null) {
-    return;
-  }
-  const trimmed = nextValue.trim();
+  const trimmed = (value || "").trim();
   if (!trimmed) {
-    toast("Ingresa un telefono valido");
-    return;
+    throw new Error("Ingresa un telefono valido");
   }
-  try {
-    const sanitized = trimmed.replace(/\s+/g, " ");
-    const resp = await api("/me/telefono", {
-      method: "POST",
-      body: JSON.stringify({ telefono: sanitized }),
-    });
-    state.me.telefono = resp.telefono || sanitized;
-    renderAccountDetails();
-    toast("Telefono actualizado", true);
-  } catch (err) {
-    toast(err.message);
-  }
+  const sanitized = trimmed.replace(/\s+/g, " ");
+  const resp = await api("/me/telefono", {
+    method: "POST",
+    body: JSON.stringify({ telefono: sanitized }),
+  });
+  state.me.telefono = resp.telefono || sanitized;
+  renderAccountDetails();
 }
 
-async function handleEditMail() {
+async function submitMailChange(value) {
   if (!state.me) {
-    toast("Inicia sesion para gestionar tu correo");
-    return;
+    throw new Error("Inicia sesion para gestionar tu correo");
   }
-  const current = state.me.mail || "";
-  const nextValue = prompt("Actualiza tu correo electronico", current);
-  if (nextValue === null) {
-    return;
-  }
-  const trimmed = nextValue.trim();
+  const trimmed = (value || "").trim();
   if (!trimmed || !trimmed.includes("@")) {
-    toast("Ingresa un correo valido");
-    return;
+    throw new Error("Ingresa un correo valido");
   }
-  try {
-    const resp = await api("/me/mail", {
-      method: "POST",
-      body: JSON.stringify({ mail: trimmed }),
-    });
-    state.me.mail = resp.mail || trimmed;
-    renderAccountDetails();
-    toast("Correo actualizado", true);
-  } catch (err) {
-    toast(err.message);
-  }
+  const resp = await api("/me/mail", {
+    method: "POST",
+    body: JSON.stringify({ mail: trimmed }),
+  });
+  state.me.mail = resp.mail || trimmed;
+  renderAccountDetails();
 }
 
 async function requestAdminFieldChange(fieldKey, value, label) {
@@ -3199,20 +3180,191 @@ async function requestAdminFieldChange(fieldKey, value, label) {
     identifier ? `ID SPM: ${identifier}` : "",
     state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
   ]);
-  toast(`Solicitud enviada para revisar ${label}`, true);
 }
 
-function handleAccountFieldEdit(fieldKey, requiresAdmin) {
+const ACCOUNT_FIELD_MESSAGES = {
+  rol: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+  posicion: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+  sector: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+  telefono: "Sus cambios fueron aplicados correctamente.",
+  mail: "Sus cambios fueron aplicados correctamente.",
+  jefe: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+  gerente1: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+  gerente2: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
+};
+
+const ACCOUNT_FIELD_DESCRIPTIONS = {
+  default: "Ingresa el nuevo valor y confirma para continuar.",
+  admin: "Este cambio enviara una solicitud al administrador para su aprobacion.",
+  telefono: "Actualiza tu numero de contacto. Usa solo numeros y caracteres validos.",
+  mail: "Actualiza tu correo electronico. Asegurate de que sea correcto.",
+};
+
+const accountEditState = {
+  modal: null,
+  fieldKey: null,
+  label: "",
+  requiresAdmin: false,
+  input: null,
+  titleNode: null,
+  descriptionNode: null,
+  currentValueNode: null,
+  confirmBtn: null,
+  cancelBtn: null,
+};
+
+function ensureAccountEditModal() {
+  if (accountEditState.modal) {
+    return accountEditState.modal;
+  }
+  const modal = document.createElement("div");
+  modal.id = "accountEditModal";
+  modal.className = "modal hide";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "accountEditTitle");
+  modal.innerHTML = `
+    <div class="modal-content account-edit-modal" role="document">
+      <button type="button" class="modal-close" id="accountEditClose" aria-label="Cerrar">&times;</button>
+      <header class="account-edit__header">
+        <h3 id="accountEditTitle"></h3>
+        <p class="account-edit__current" id="accountEditCurrent"></p>
+      </header>
+      <p class="account-edit__description" id="accountEditDescription"></p>
+      <label class="account-edit__label" for="accountEditInput">Nuevo valor</label>
+      <input type="text" id="accountEditInput" class="account-edit__input" autocomplete="off">
+      <div class="account-edit__footer">
+        <button type="button" class="btn sec" id="accountEditCancel">Cancelar</button>
+        <button type="button" class="btn pri" id="accountEditConfirm">Confirmar</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) {
+      closeAccountEditModal();
+    }
+  });
+  modal.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      closeAccountEditModal();
+    }
+  });
+  document.body.appendChild(modal);
+
+  accountEditState.modal = modal;
+  accountEditState.input = modal.querySelector("#accountEditInput");
+  accountEditState.titleNode = modal.querySelector("#accountEditTitle");
+  accountEditState.descriptionNode = modal.querySelector("#accountEditDescription");
+  accountEditState.currentValueNode = modal.querySelector("#accountEditCurrent");
+  accountEditState.confirmBtn = modal.querySelector("#accountEditConfirm");
+  accountEditState.cancelBtn = modal.querySelector("#accountEditCancel");
+
+  modal.querySelector("#accountEditClose")?.addEventListener("click", closeAccountEditModal);
+  accountEditState.cancelBtn?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeAccountEditModal();
+  });
+  accountEditState.confirmBtn?.addEventListener("click", confirmAccountEditChange);
+  accountEditState.input?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      confirmAccountEditChange(ev);
+    }
+  });
+
+  return modal;
+}
+
+function openAccountEditModal(fieldKey, config) {
+  const modal = ensureAccountEditModal();
+  accountEditState.fieldKey = fieldKey;
+  accountEditState.label = config.label;
+  accountEditState.requiresAdmin = !!config.admin;
+
+  const currentValue = String(state.me?.[fieldKey] || "").trim();
+  accountEditState.input.value = currentValue;
+  accountEditState.input.setAttribute("data-initial", currentValue);
+  accountEditState.titleNode.textContent = `Editar ${config.label}`;
+  accountEditState.currentValueNode.textContent = currentValue ? `Valor actual: ${currentValue}` : "Valor actual: sin informacion";
+
+  const descriptionKey = config.admin ? "admin" : fieldKey;
+  const description = ACCOUNT_FIELD_DESCRIPTIONS[descriptionKey] || ACCOUNT_FIELD_DESCRIPTIONS.default;
+  accountEditState.descriptionNode.textContent = description;
+
+  modal.classList.remove("hide");
+  modal.setAttribute("aria-hidden", "false");
+
+  setTimeout(() => {
+    accountEditState.input?.focus();
+    accountEditState.input?.select();
+  }, 0);
+}
+
+function closeAccountEditModal() {
+  if (!accountEditState.modal) {
+    return;
+  }
+  accountEditState.modal.classList.add("hide");
+  accountEditState.modal.setAttribute("aria-hidden", "true");
+  accountEditState.fieldKey = null;
+  accountEditState.label = "";
+  accountEditState.requiresAdmin = false;
+}
+
+async function confirmAccountEditChange(ev) {
+  if (ev) {
+    ev.preventDefault();
+  }
+  if (!accountEditState.fieldKey || !state.me) {
+    return;
+  }
+  const fieldKey = accountEditState.fieldKey;
+  const config = ACCOUNT_FIELD_CONFIG.find((field) => field.key === fieldKey);
+  if (!config) {
+    toast("Campo no soportado");
+    return;
+  }
+  const rawValue = accountEditState.input?.value ?? "";
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    toast("Ingresa un valor valido");
+    accountEditState.input?.focus();
+    return;
+  }
+
+  const currentValue = String(state.me[fieldKey] || "").trim();
+  if (trimmed === currentValue) {
+    toast("No hay cambios para guardar");
+    return;
+  }
+
+  try {
+    const feedback = await applyAccountFieldChange(fieldKey, trimmed, config);
+    closeAccountEditModal();
+    if (feedback) {
+      toast(feedback, true);
+    }
+  } catch (error) {
+    toast(error?.message || "No se pudo actualizar el campo");
+  }
+}
+
+async function applyAccountFieldChange(fieldKey, value, config) {
+  if (fieldKey === "telefono") {
+    await submitPhoneChange(value);
+  } else if (fieldKey === "mail") {
+    await submitMailChange(value);
+  } else if (config.admin) {
+    await requestAdminFieldChange(fieldKey, value, config.label);
+  } else {
+    state.me[fieldKey] = value;
+    renderAccountDetails();
+  }
+  return ACCOUNT_FIELD_MESSAGES[fieldKey] || "Cambios aplicados";
+}
+
+function handleAccountFieldEdit(fieldKey) {
   if (!state.me) {
     toast("Inicia sesion para gestionar tu perfil");
-    return;
-  }
-  if (fieldKey === "telefono") {
-    handleEditPhone();
-    return;
-  }
-  if (fieldKey === "mail") {
-    handleEditMail();
     return;
   }
   const config = ACCOUNT_FIELD_CONFIG.find((field) => field.key === fieldKey);
@@ -3220,22 +3372,7 @@ function handleAccountFieldEdit(fieldKey, requiresAdmin) {
     toast("Campo no soportado");
     return;
   }
-  const current = String(state.me[fieldKey] || "");
-  const nextValue = prompt(`Nuevo valor para ${config.label}`, current);
-  if (nextValue === null) {
-    return;
-  }
-  const trimmed = nextValue.trim();
-  if (!trimmed) {
-    toast("Ingresa un valor válido");
-    return;
-  }
-  if (requiresAdmin) {
-    requestAdminFieldChange(fieldKey, trimmed, config.label);
-    return;
-  }
-  state.me[fieldKey] = trimmed;
-  renderAccountDetails();
+  openAccountEditModal(fieldKey, config);
 }
 
 function formatUserCentersList() {
@@ -3252,6 +3389,7 @@ function formatUserCentersList() {
 }
 
 function renderAccountDetails() {
+  console.log("renderAccountDetails llamada");
   const section = document.getElementById("accountDetails");
   if (!section || !state.me) {
     return;
@@ -3262,12 +3400,8 @@ function renderAccountDetails() {
   const accountFields = ACCOUNT_FIELD_CONFIG.map((field) => {
     const valueRaw = field.key === "mail" ? user.mail : field.key === "telefono" ? user.telefono : user[field.key];
     const valueText = String(valueRaw || "").trim() || "Sin informacion";
-    const badge = field.admin
-      ? '<span class="account-field__tag account-field__tag--admin">Requiere aprobacion de Administrador</span>'
-      : '<span class="account-field__tag account-field__tag--self">Edicion directa</span>';
     const editButton = `
-      <button type="button" class="account-field__edit" data-field="${field.key}" data-admin="${field.admin ? "1" : "0"}">
-        <span class="sr-only">Editar ${escapeHtml(field.label)}</span>
+      <button type="button" class="account-field__edit" data-field="${field.key}" data-admin="${field.admin ? "1" : "0"}" title="Editar ${escapeHtml(field.label)}">
         ${ICONS.pencil}
       </button>
     `;
@@ -3275,7 +3409,6 @@ function renderAccountDetails() {
       <div class="account-field" data-field="${field.key}">
         <div class="account-field__label">
           <span>${escapeHtml(field.label)}</span>
-          ${badge}
         </div>
         <div class="account-field__value">
           <span>${escapeHtml(valueText)}</span>
@@ -3304,18 +3437,16 @@ function renderAccountDetails() {
       <div class="account-card__centers">
         <div class="account-field__label">
           <span>Centros asignados</span>
-          <span class="account-field__tag account-field__tag--admin">Requiere aprobacion de Administrador</span>
         </div>
         <div class="account-centers__list">
           ${centersContent}
-          <button type="button" class="account-field__plus" id="accountRequestCenters" title="Solicitar acceso a mas centros">
+          <button type="button" class="account-field__plus" id="accountRequestCenters" title="Solicitar acceso a más centros">
             <span aria-hidden="true">+</span>
-            <span class="sr-only">Solicitar acceso a mas centros</span>
           </button>
         </div>
       </div>
       <div class="account-card__actions">
-        <button type="button" class="btn ghost" id="accountChangePassword">Cambiar contrasena</button>
+        <button type="button" class="btn ghost" id="accountChangePassword">Cambiar Contraseña</button>
         <button type="button" class="btn sec" id="requestAccountDeletion">Solicitar baja de cuenta</button>
       </div>
     </section>
@@ -3324,10 +3455,12 @@ function renderAccountDetails() {
   section.querySelectorAll(".account-field__edit").forEach((button) => {
     button.addEventListener("click", () => {
       const field = button.dataset.field;
-      const requiresAdmin = button.dataset.admin === "1";
-      handleAccountFieldEdit(field, requiresAdmin);
+      if (field) {
+        handleAccountFieldEdit(field);
+      }
     });
   });
+
 
   const changePasswordBtn = document.getElementById("accountChangePassword");
   if (changePasswordBtn) {
@@ -3503,6 +3636,7 @@ function renderCentersCascade(searchTerm = "") {
           <div class="centers-cascade__content">
             <div class="centers-cascade__row">
               <span class="centers-cascade__code">${escapeHtml(opt.code)}</span>
+
               ${nameMarkup}
               ${statusMarkup}
             </div>
@@ -3781,6 +3915,307 @@ function initAuthPage() {
   if (idInput) idInput.focus();
 }
 
+// Admin functions
+function initAdminUsuarios() {
+  loadUsuarios();
+}
+
+function initAdminCentros() {
+  loadCentros();
+}
+
+function initAdminMateriales() {
+  loadMateriales();
+}
+
+function initAdminAlmacenes() {
+  loadAlmacenes();
+}
+
+function initAdminConfiguracion() {
+  loadConfiguracion();
+}
+
+async function loadUsuarios() {
+  try {
+    const response = await fetch('/api/admin/usuarios');
+    if (!response.ok) throw new Error('Error al cargar usuarios');
+    const data = await response.json();
+    renderUsuarioTable(data.usuarios || []);
+  } catch (error) {
+    console.error('Error loading usuarios:', error);
+    toast('Error al cargar usuarios');
+  }
+}
+
+function renderUsuarioTable(usuarios) {
+  const tableBody = document.querySelector('#adminUsersTable tbody');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  usuarios.forEach(usuario => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${usuario.id || ''}</td>
+      <td>${usuario.nombre || ''} ${usuario.apellido || ''}</td>
+      <td>${usuario.rol || ''}</td>
+      <td>${usuario.posicion || ''}</td>
+      <td>${usuario.sector || ''}</td>
+      <td>${Array.isArray(usuario.centros) ? usuario.centros.join(', ') : usuario.centros || ''}</td>
+      <td>${usuario.mail || ''}</td>
+    `;
+    row.addEventListener('click', () => selectUsuario(usuario));
+    tableBody.appendChild(row);
+  });
+  
+  // Update total count
+  const totalEl = document.getElementById('adminUserTotal');
+  if (totalEl) totalEl.textContent = `${usuarios.length} usuarios`;
+}
+
+function deleteUsuario(id) {
+  // TODO: Implement delete functionality
+  toast('Función de eliminar usuario no implementada aún');
+}
+
+async function loadCentros() {
+  try {
+    const response = await fetch('/api/admin/centros');
+    if (!response.ok) throw new Error('Error al cargar centros');
+    const data = await response.json();
+    
+    // Render solicitudes por centro
+    renderCentrosSolicitudes(data.solicitudes || []);
+    
+    // Render presupuestos
+    renderCentrosPresupuestos(data.presupuestos || []);
+  } catch (error) {
+    console.error('Error loading centros:', error);
+    toast('Error al cargar centros');
+  }
+}
+
+function renderCentrosSolicitudes(solicitudes) {
+  const tableBody = document.querySelector('#adminCentrosSolicitudes tbody');
+  const emptyMsg = document.getElementById('adminCentrosSolicitudesEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (solicitudes.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  solicitudes.forEach(solicitud => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${solicitud.centro || ''}</td>
+      <td>${solicitud.total || 0}</td>
+      <td>$${solicitud.monto ? solicitud.monto.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
+  });
+}
+
+function renderCentrosPresupuestos(presupuestos) {
+  const tableBody = document.querySelector('#adminCentrosPresupuestos tbody');
+  const emptyMsg = document.getElementById('adminCentrosPresupuestosEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (presupuestos.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  presupuestos.forEach(presupuesto => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${presupuesto.centro || ''}</td>
+      <td>${presupuesto.sector || ''}</td>
+      <td>$${presupuesto.monto_usd ? presupuesto.monto_usd.toFixed(2) : '0.00'}</td>
+      <td>$${presupuesto.saldo_usd ? presupuesto.saldo_usd.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
+  });
+}
+
+async function loadMateriales() {
+  try {
+    const response = await fetch('/api/admin/materiales');
+    if (!response.ok) throw new Error('Error al cargar materiales');
+    const data = await response.json();
+    renderMaterialesTable(data.items || []);
+    
+    // Update total count
+    const totalEl = document.getElementById('adminMaterialTotal');
+    if (totalEl) totalEl.textContent = `${data.total || 0} materiales`;
+  } catch (error) {
+    console.error('Error loading materiales:', error);
+    toast('Error al cargar materiales');
+  }
+}
+
+function renderMaterialesTable(materiales) {
+  const tableBody = document.querySelector('#adminMaterialTable tbody');
+  const emptyMsg = document.getElementById('adminMaterialEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (materiales.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  materiales.forEach(material => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${material.codigo || ''}</td>
+      <td>${material.descripcion || ''}</td>
+      <td>${material.unidad || ''}</td>
+      <td>$${material.precio_usd ? material.precio_usd.toFixed(2) : '0.00'}</td>
+      <td>${material.centro || ''}</td>
+      <td>${material.sector || ''}</td>
+    `;
+    row.addEventListener('click', () => selectMaterial(material));
+    tableBody.appendChild(row);
+  });
+}
+
+function selectMaterial(material) {
+  // TODO: Implement material selection and form population
+  toast('Selección de material no implementada aún');
+}
+
+async function loadAlmacenes() {
+  try {
+    const response = await fetch('/api/admin/almacenes');
+    if (!response.ok) throw new Error('Error al cargar almacenes');
+    const data = await response.json();
+    renderAlmacenesTable(data.items || []);
+  } catch (error) {
+    console.error('Error loading almacenes:', error);
+    toast('Error al cargar almacenes');
+  }
+}
+
+function renderAlmacenesTable(almacenes) {
+  const tableBody = document.querySelector('#adminAlmacenesTable tbody');
+  const emptyMsg = document.getElementById('adminAlmacenesEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (almacenes.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  almacenes.forEach(almacen => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${almacen.almacen || ''}</td>
+      <td>${almacen.total || 0}</td>
+      <td>$${almacen.monto ? almacen.monto.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
+  });
+}
+
+async function loadConfiguracion() {
+  try {
+    const response = await fetch('/api/admin/config');
+    if (!response.ok) throw new Error('Error al cargar configuración');
+    const data = await response.json();
+    
+    // Render each config section
+    Object.keys(data.data || {}).forEach(resource => {
+      renderConfigTable(resource, data.data[resource]);
+    });
+  } catch (error) {
+    console.error('Error loading configuracion:', error);
+    toast('Error al cargar configuración');
+  }
+}
+
+function renderConfigTable(resource, items) {
+  const tableBody = document.querySelector(`table[data-config-table="${resource}"] tbody`);
+  const emptyMsg = document.querySelector(`p[data-config-empty="${resource}"]`);
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (items.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  items.forEach(item => {
+    const row = document.createElement('tr');
+    // Different columns based on resource
+    if (resource === 'centros') {
+      row.innerHTML = `
+        <td>${item.codigo || ''}</td>
+        <td>${item.nombre || ''}</td>
+        <td>${item.descripcion || ''}</td>
+        <td>${item.notas || ''}</td>
+        <td>${item.activo ? 'Activo' : 'Inactivo'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary edit-btn" data-resource="${resource}" data-id="${item.id}">Editar</button>
+          <button class="btn btn-sm btn-danger delete-btn" data-resource="${resource}" data-id="${item.id}">Eliminar</button>
+        </td>
+      `;
+    } else if (resource === 'almacenes') {
+      row.innerHTML = `
+        <td>${item.codigo || ''}</td>
+        <td>${item.nombre || ''}</td>
+        <td>${item.centro_codigo || ''}</td>
+        <td>${item.descripcion || ''}</td>
+        <td>${item.activo ? 'Activo' : 'Inactivo'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary edit-btn" data-resource="${resource}" data-id="${item.id}">Editar</button>
+          <button class="btn btn-sm btn-danger delete-btn" data-resource="${resource}" data-id="${item.id}">Eliminar</button>
+        </td>
+      `;
+    }
+    // Add more resources as needed
+    
+    tableBody.appendChild(row);
+  });
+  
+  // Bind events
+  tableBody.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => editConfigItem(btn.dataset.resource, btn.dataset.id));
+  });
+  tableBody.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteConfigItem(btn.dataset.resource, btn.dataset.id));
+  });
+}
+
+function editConfigItem(resource, id) {
+  // TODO: Implement edit functionality
+  toast(`Función de editar ${resource} no implementada aún`);
+}
+
+function deleteConfigItem(resource, id) {
+  // TODO: Implement delete functionality
+  toast(`Función de eliminar ${resource} no implementada aún`);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const rawPage = window.location.pathname.split("/").pop();
   const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
@@ -3801,7 +4236,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const userNameNode = document.getElementById("userName");
         if (userNameNode) userNameNode.textContent = userName;
         initHomeHero(userName);
-        const isAdmin = typeof state.me?.rol === "string" && state.me.rol.toLowerCase().includes("admin");
+        const isAdmin = typeof state.me?.rol === "string" && (state.me.rol.toLowerCase().includes("admin") || state.me.rol.toLowerCase().includes("administrador"));
         if (isAdmin) {
           initSystemConsole();
         }
@@ -3809,6 +4244,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentPage === "admin-solicitudes.html") {
         loadProfileRequests();
+      }
+
+      if (currentPage === "admin-usuarios.html") {
+        initAdminUsuarios();
+      }
+
+      if (currentPage === "admin-centros.html") {
+        initAdminCentros();
+      }
+
+      if (currentPage === "admin-materiales.html") {
+        initAdminMateriales();
+      }
+
+      if (currentPage === "admin-almacenes.html") {
+        initAdminAlmacenes();
+      }
+
+      if (currentPage === "admin-configuracion.html") {
+        initAdminConfiguracion();
+      }
+
+      if (currentPage === "mi-cuenta.html") {
+        document.body.classList.add('page-mi-cuenta');
+        try {
+          await loadCatalogData();
+          renderAccountDetails();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudieron cargar los datos de la cuenta");
+        }
       }
 
       if (currentPage === "crear-solicitud.html") {
@@ -3845,39 +4311,85 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Controlar visibilidad del menÃº segÃºn el rol
+// Controlar visibilidad del menú según el rol
 function updateMenuVisibility() {
+  // Asegurarse de que el DOM esté listo
+  if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+    setTimeout(updateMenuVisibility, 100);
+    return;
+  }
+
   const adminMenuItem = document.getElementById("adminMenuItem");
   const plannerMenuItem = document.getElementById("plannerMenuItem");
   const approverMenuItem = document.getElementById("approverMenuItem");
+  const navPresupuesto = document.getElementById("navPresupuesto");
+  const systemConsole = document.getElementById("systemConsole");
 
-  const userRole = state.me?.rol?.toLowerCase();
+  // Si ningún elemento existe aún, reintentar
+  if (!adminMenuItem && !plannerMenuItem && !approverMenuItem && !navPresupuesto && !systemConsole) {
+    setTimeout(updateMenuVisibility, 100);
+    return;
+  }
 
-  // Admin
+  const rawUserRole = state.me?.rol;
+  const userRole = rawUserRole?.toLowerCase()?.trim();
+
+  // Lógica específica para rol "solicitante"
+  if (userRole === "solicitante") {
+    // Para solicitante: mostrar solo Inicio, Solicitudes, Notificaciones y Presupuesto
+    // Ocultar Panel de control, Planificador y Aprobaciones
+    if (adminMenuItem) adminMenuItem.classList.add("hide");
+    if (plannerMenuItem) plannerMenuItem.classList.add("hide");
+    if (approverMenuItem) approverMenuItem.classList.add("hide");
+    // Mostrar presupuesto para solicitante
+    if (navPresupuesto) navPresupuesto.classList.remove("hide");
+    if (systemConsole) systemConsole.classList.add("hide");
+    return;
+  }
+
+  // Lógica existente para otros roles
+  // Admin - mostrar solo si incluye admin o administrador
   if (adminMenuItem) {
-    if (userRole === "admin") {
+    const shouldShowAdmin = userRole && (userRole.includes("admin") || userRole.includes("administrador"));
+    if (shouldShowAdmin) {
       adminMenuItem.classList.remove("hide");
     } else {
       adminMenuItem.classList.add("hide");
     }
   }
 
-  // Planificador
+  // Planificador - mostrar solo si incluye planificador
   if (plannerMenuItem) {
-    if (userRole === "planificador") {
+    const shouldShowPlanner = userRole && userRole.includes("planificador");
+    if (shouldShowPlanner) {
       plannerMenuItem.classList.remove("hide");
     } else {
       plannerMenuItem.classList.add("hide");
     }
   }
 
-  // Aprobador
+  // Aprobador - mostrar solo si incluye aprobador
   if (approverMenuItem) {
-    if (userRole === "aprobador") {
+    const shouldShowApprover = userRole && userRole.includes("aprobador");
+    if (shouldShowApprover) {
       approverMenuItem.classList.remove("hide");
     } else {
       approverMenuItem.classList.add("hide");
     }
+  }
+
+  // Presupuesto - mostrar para roles que no sean solicitante (ya que solicitante tiene lógica específica arriba)
+  if (navPresupuesto) {
+    // Mostrar presupuesto para admin, planificador, aprobador y otros roles
+    // Solo ocultar para solicitante (que ya se maneja arriba)
+    if (userRole && userRole !== "solicitante") {
+      navPresupuesto.classList.remove("hide");
+    }
+  }
+
+  if (systemConsole) {
+    const shouldShowConsole = userRole && (userRole.includes("admin") || userRole.includes("administrador"));
+    systemConsole.classList.toggle("hide", !shouldShowConsole);
   }
 }
 
@@ -3908,9 +4420,15 @@ var toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m)
 var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
 // =====================================================
 
-// MÃ³dulo Planificador
+// Módulo Planificador
 (function initPlanificador() {
   if (!/planificador\.html$/.test(location.pathname)) return;
+
+  // Adjust padding for planificador page
+  const mainEl = document.querySelector("main");
+  if (mainEl) {
+    mainEl.style.paddingTop = "7rem"; // Increase by 50px (6.5rem + 0.5rem)
+  }
 
   const state = {
     pageMias: 0, pagePend: 0, limit: 20,

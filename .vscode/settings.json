@@ -4,5 +4,6 @@
             ".continue/**/*.yaml",
             "file:///c%3A/Users/manue/.continue/config.yaml"
         ]
-    }
+    },
+    "chatgpt.openOnStartup": true
 }

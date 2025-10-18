@@ -21,7 +21,7 @@ from backend.routes.catalogos import bp as catalogos_bp
 from backend.routes.archivos import bp as archivos_bp
 from backend.routes.planificador import bp as planner_bp
 from backend.routes.abastecimiento import bp as abastecimiento_bp
-from backend.routes.ai import bp as ai_bp
+# from backend.routes.ai import bp as ai_bp
 
 def _setup_logging(app: Flask) -> None:
     Settings.ensure_dirs()
@@ -83,7 +83,7 @@ def create_app() -> Flask:
     app.register_blueprint(catalogos_bp)
     app.register_blueprint(archivos_bp)
     app.register_blueprint(abastecimiento_bp)
-    app.register_blueprint(ai_bp)
+    # app.register_blueprint(ai_bp)
 
     @app.get("/api/health")
     def health():

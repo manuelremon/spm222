@@ -11,16 +11,16 @@ def search_materiales():
     clauses: list[str] = []
     args: list[str] = []
     if params.codigo:
-        like_code = f"%{params.codigo.lower()}%"
-        clauses.append("lower(codigo) LIKE ?")
+        like_code = f"%{params.codigo}%"
+        clauses.append("codigo LIKE ? COLLATE NOCASE")
         args.append(like_code)
     if params.descripcion:
-        like_desc = f"%{params.descripcion.lower()}%"
-        clauses.append("lower(descripcion) LIKE ?")
+        like_desc = f"%{params.descripcion}%"
+        clauses.append("descripcion LIKE ? COLLATE NOCASE")
         args.append(like_desc)
     if params.q:
-        like_any = f"%{params.q.lower()}%"
-        clauses.append("(lower(codigo) LIKE ? OR lower(descripcion) LIKE ?)")
+        like_any = f"%{params.q}%"
+        clauses.append("(codigo LIKE ? COLLATE NOCASE OR descripcion LIKE ? COLLATE NOCASE)")
         args.extend([like_any, like_any])
     where = " AND ".join(clauses) if clauses else "1=1"
     # Ajustar el límite de resultados según el tipo de búsqueda para permitir
