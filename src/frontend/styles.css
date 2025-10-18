@@ -1054,8 +1054,6 @@ body[data-theme="light"] .notification-content {
 .account-field__edit svg{width:1rem;height:1rem;fill:currentColor;}
 .account-field__edit:hover{transform:translateY(-1px);border-color:rgba(56,189,248,.8);background:rgba(14,165,233,.3);color:#f8fafc;}
 .account-field__edit:active{transform:translateY(0);border-color:rgba(56,189,248,1);background:rgba(14,165,233,.5);}
-.account-field__input{border:1px solid rgba(59,130,246,.5);background:#f8fafc;color:#1f2937;}
-.account-field__input:focus{border-color:rgba(37,99,235,.8);}
 .account-card__centers{display:flex;flex-direction:column;gap:.75rem;position:relative;z-index:1;}
 .account-centers__list{display:flex;flex-wrap:wrap;gap:.55rem;}
 .account-centers__chip{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem .75rem;border-radius:.85rem;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.3);color:#e0f2fe;font-size:.85rem;}
@@ -1075,8 +1073,6 @@ body[data-theme="light"] .account-field__tag--self{background:rgba(34,197,94,.16
 body[data-theme="light"] .account-field__edit{background:#eff6ff;color:#1d4ed8;border-color:rgba(59,130,246,.35);}
 body[data-theme="light"] .account-field__edit:hover{background:#dbeafe;border-color:rgba(37,99,235,.55);color:#1e3a8a;}
 body[data-theme="light"] .account-field__edit:active{background:#bfdbfe;border-color:rgba(37,99,235,.8);color:#1e3a8a;}
-body[data-theme="light"] .account-field__input{border:1px solid rgba(59,130,246,.5);background:#f8fafc;color:#1f2937;}
-body[data-theme="light"] .account-field__input:focus{border-color:rgba(37,99,235,.8);}
 body[data-theme="light"] .account-centers__chip{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#1e3a8a;}
 body[data-theme="light"] .account-field__plus{border-color:rgba(59,130,246,.35);background:rgba(191,219,254,.6);color:#1e3a8a;}
 

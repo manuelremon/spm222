@@ -11,13 +11,6 @@ window.addEventListener('error', (e) => {
 // Asegura que el contenido sea visible al cargar la página
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('is-ready');
-
-  // Initialize auth page event listeners
-  if (window.location.pathname.includes('index.html') || window.location.pathname === '/') {
-    on($("#login"), "click", login);
-    on($("#register"), "click", register);
-    on($("#recover"), "click", recover);
-  }
 });
 const API = (function () {
   if (location.protocol === "file:") {
@@ -65,22 +58,8 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json" },
     ...opts,
   };
-  let res = await fetch(`${API}${path}`, config);
+  const res = await fetch(`${API}${path}`, config);
   if (!res.ok) {
-    if (res.status === 401) {
-      const token = localStorage.getItem('spm_token');
-      if (token) {
-        const retryConfig = {
-          ...config,
-          headers: { ...config.headers, 'Authorization': `Bearer ${token}` },
-        };
-        res = await fetch(`${API}${path}`, retryConfig);
-        if (res.ok) {
-          const isJson = res.headers.get("content-type")?.includes("application/json");
-          return isJson ? res.json() : res.text();
-        }
-      }
-    }
     let err = "Error de red";
     try {
       const json = await res.json();
@@ -1958,64 +1937,66 @@ async function decideSolicitudDecision(id, action, triggerBtn) {
   }
 
   const numericId = Number(id);
-  if (!Number.isNaN(numericId) && numericId > 0) {
-    let comentario = null;
-    if (action === "aprobar") {
-      const confirmed = window.confirm(`¿Confirmás aprobar la solicitud #${numericId}?`);
-      if (!confirmed) {
-        return;
-      }
-    } else if (action === "rechazar") {
-      const reason = window.prompt(`Motivo del rechazo para la solicitud #${numericId} (opcional):`, "");
-      if (reason === null) {
-        return;
-      }
-      comentario = reason.trim() || null;
-      const confirmed = window.confirm(`¿Confirmás rechazar la solicitud #${numericId}?`);
-      if (!confirmed) {
-        return;
-      }
-    } else {
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return;
+  }
+
+  let comentario = null;
+  if (action === "aprobar") {
+    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud #${numericId}?`);
+    if (!confirmed) {
       return;
     }
-
-    if (triggerBtn) {
-      triggerBtn.disabled = true;
+  } else if (action === "rechazar") {
+    const reason = window.prompt(`Motivo del rechazo para la solicitud #${numericId} (opcional):`, "");
+    if (reason === null) {
+      return;
     }
+    comentario = reason.trim() || null;
+    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud #${numericId}?`);
+    if (!confirmed) {
+      return;
+    }
+  } else {
+    return;
+  }
 
-    try {
-      const body = { accion: action };
-      if (comentario) {
-        body.comentario = comentario;
-      }
-      const resp = await api(`/solicitudes/${numericId}/decidir`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      if (!resp?.ok) {
-        throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
-      }
-      const status = (resp.status || "").toLowerCase();
-      let okMsg = "Decisión registrada";
-      if (status === "aprobada") {
-        okMsg = "Solicitud aprobada";
-      } else if (status === "rechazada") {
-        okMsg = "Solicitud rechazada";
-      }
-      toast(okMsg, true);
-      const updated = await loadNotificationsSummary({ markAsRead: true });
-      renderNotificationsPage(updated);
-      
-      // Si hay una solicitud abierta en el modal de detalles, recargar sus detalles
-      if (state.selectedSolicitud && state.selectedSolicitud.id === numericId && status === "en_tratamiento") {
-        await openSolicitudDetail(numericId);
-      }
-    } catch (err) {
-      toast(err.message || "No se pudo registrar la decisión");
-    } finally {
-      if (triggerBtn) {
-        triggerBtn.disabled = false;
-      }
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+  }
+
+  try {
+    const body = { accion: action };
+    if (comentario) {
+      body.comentario = comentario;
+    }
+    const resp = await api(`/solicitudes/${numericId}/decidir`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!resp?.ok) {
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
+    }
+    const status = (resp.status || "").toLowerCase();
+    let okMsg = "Decisión registrada";
+    if (status === "aprobada") {
+      okMsg = "Solicitud aprobada";
+    } else if (status === "rechazada") {
+      okMsg = "Solicitud rechazada";
+    }
+    toast(okMsg, true);
+    const updated = await loadNotificationsSummary({ markAsRead: true });
+    renderNotificationsPage(updated);
+    
+    // Si hay una solicitud abierta en el modal de detalles, recargar sus detalles
+    if (state.selectedSolicitud && state.selectedSolicitud.id === numericId && status === "en_tratamiento") {
+      await openSolicitudDetail(numericId);
+    }
+  } catch (err) {
+    toast(err.message || "No se pudo registrar la decisión");
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
     }
   }
 }
@@ -2025,64 +2006,66 @@ async function decideCentroRequest(id, action, triggerBtn) {
     return;
   }
   const numericId = Number(id);
-  if (!Number.isNaN(numericId) && numericId > 0) {
-    let comentario = null;
-    if (action === "aprobar") {
-      const confirmed = window.confirm(`¿Confirmás aprobar la solicitud de centros #${numericId}?`);
-      if (!confirmed) {
-        return;
-      }
-    } else if (action === "rechazar") {
-      const reason = window.prompt(
-        `Motivo del rechazo para la solicitud de centros #${numericId} (opcional):`,
-        ""
-      );
-      if (reason === null) {
-        return;
-      }
-      comentario = reason.trim() || null;
-      const confirmed = window.confirm(`¿Confirmás rechazar la solicitud de centros #${numericId}?`);
-      if (!confirmed) {
-        return;
-      }
-    } else {
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return;
+  }
+
+  let comentario = null;
+  if (action === "aprobar") {
+    const confirmed = window.confirm(`¿Confirmás aprobar la solicitud de centros #${numericId}?`);
+    if (!confirmed) {
       return;
     }
-
-    if (triggerBtn) {
-      triggerBtn.disabled = true;
-      triggerBtn.setAttribute("aria-busy", "true");
+  } else if (action === "rechazar") {
+    const reason = window.prompt(
+      `Motivo del rechazo para la solicitud de centros #${numericId} (opcional):`,
+      ""
+    );
+    if (reason === null) {
+      return;
     }
+    comentario = reason.trim() || null;
+    const confirmed = window.confirm(`¿Confirmás rechazar la solicitud de centros #${numericId}?`);
+    if (!confirmed) {
+      return;
+    }
+  } else {
+    return;
+  }
 
-    try {
-      const body = { accion: action };
-      if (comentario) {
-        body.comentario = comentario;
-      }
-      const resp = await api(`/notificaciones/centros/${numericId}/decision`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      if (!resp?.ok) {
-        throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
-      }
-      const estado = (resp.estado || "").toLowerCase();
-      let okMsg = "Decisión registrada";
-      if (estado === "aprobado") {
-        okMsg = "Solicitud de centros aprobada";
-      } else if (estado === "rechazado") {
-        okMsg = "Solicitud de centros rechazada";
-      }
-      toast(okMsg, true);
-      const updated = await loadNotificationsSummary();
-      renderNotificationsPage(updated);
-    } catch (err) {
-      toast(err.message || "No se pudo registrar la decisión");
-    } finally {
-      if (triggerBtn) {
-        triggerBtn.disabled = false;
-        triggerBtn.removeAttribute("aria-busy");
-      }
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.setAttribute("aria-busy", "true");
+  }
+
+  try {
+    const body = { accion: action };
+    if (comentario) {
+      body.comentario = comentario;
+    }
+    const resp = await api(`/notificaciones/centros/${numericId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!resp?.ok) {
+      throw new Error(resp?.error?.message || "No se pudo registrar la decisión");
+    }
+    const estado = (resp.estado || "").toLowerCase();
+    let okMsg = "Decisión registrada";
+    if (estado === "aprobado") {
+      okMsg = "Solicitud de centros aprobada";
+    } else if (estado === "rechazado") {
+      okMsg = "Solicitud de centros rechazada";
+    }
+    toast(okMsg, true);
+    const updated = await loadNotificationsSummary();
+    renderNotificationsPage(updated);
+  } catch (err) {
+    toast(err.message || "No se pudo registrar la decisión");
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.removeAttribute("aria-busy");
     }
   }
 }
@@ -2144,7 +2127,7 @@ function renderNotificationsPage(data) {
         const header = document.createElement("div");
         header.className = "notification-item-header";
         const createdAt = formatDateTime(notif.created_at);
-        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "Notificación")}</span><time>${ createdAt}</time>`;
+        header.innerHTML = `<span>${escapeHtml(notif.mensaje || "Notificación")}</span><time>${createdAt}</time>`;
         node.appendChild(header);
 
         if (notif.solicitud_id) {
@@ -2409,7 +2392,7 @@ async function login() {
   const id = $("#id").value.trim();
   const password = $("#pw").value;
   try {
-    const resp = await api("/login", {
+    await api("/login", {
       method: "POST",
       body: JSON.stringify({ id, password }),
     });
@@ -3131,26 +3114,18 @@ function requestPasswordChange() {
   ]);
 }
 
-async function requestAccountDeletion() {
+function requestAccountDeletion() {
   if (!state.me) {
     toast("Inicia sesion para gestionar tu cuenta");
     return;
   }
-  const confirmed1 = confirm("¿Estás seguro de que quieres eliminar tu cuenta?\n\nEsta acción no se puede deshacer. Perderás acceso a todos tus datos y registros de actividad.");
-  if (!confirmed1) return;
-  const confirmed2 = confirm("Confirmación final: ¿Realmente deseas proceder con la eliminación de tu cuenta?\n\nTodos los registros de tu actividad serán eliminados permanentemente y no podrán ser recuperados.");
-  if (!confirmed2) return;
-
-  try {
-    const resp = await api("/request_account_deletion", { method: "POST" });
-    if (resp.ok) {
-      toast("Solicitud de eliminación enviada. Un administrador revisará tu petición.", true);
-    } else {
-      toast(resp.error?.message || "Error al enviar solicitud");
-    }
-  } catch (error) {
-    toast("Error al procesar la solicitud");
-  }
+  const identifier = state.me.id || state.me.id_spm || "";
+  accountSupportMail("Solicitud de baja de cuenta SPM", [
+    "Hola equipo SPM,",
+    "Solicito eliminar mi cuenta de SPM.",
+    identifier ? `ID SPM: ${identifier}` : "",
+    state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
+  ]);
 }
 
 const ACCOUNT_FIELD_CONFIG = [
@@ -3163,6 +3138,49 @@ const ACCOUNT_FIELD_CONFIG = [
   { key: "gerente1", label: "Gerente 1", admin: true },
   { key: "gerente2", label: "Gerente 2", admin: true },
 ];
+
+async function submitPhoneChange(value) {
+  if (!state.me) {
+    throw new Error("Inicia sesion para gestionar tu telefono");
+  }
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    throw new Error("Ingresa un telefono valido");
+  }
+  const sanitized = trimmed.replace(/\s+/g, " ");
+  const resp = await api("/me/telefono", {
+    method: "POST",
+    body: JSON.stringify({ telefono: sanitized }),
+  });
+  state.me.telefono = resp.telefono || sanitized;
+  renderAccountDetails();
+}
+
+async function submitMailChange(value) {
+  if (!state.me) {
+    throw new Error("Inicia sesion para gestionar tu correo");
+  }
+  const trimmed = (value || "").trim();
+  if (!trimmed || !trimmed.includes("@")) {
+    throw new Error("Ingresa un correo valido");
+  }
+  const resp = await api("/me/mail", {
+    method: "POST",
+    body: JSON.stringify({ mail: trimmed }),
+  });
+  state.me.mail = resp.mail || trimmed;
+  renderAccountDetails();
+}
+
+async function requestAdminFieldChange(fieldKey, value, label) {
+  const identifier = state.me?.id || state.me?.id_spm || "";
+  accountSupportMail(`Solicitud de actualizacion de ${label}`, [
+    "Hola equipo SPM,",
+    `Solicito actualizar ${label} a: ${value}.`,
+    identifier ? `ID SPM: ${identifier}` : "",
+    state.me.mail ? `Correo registrado: ${state.me.mail}` : "",
+  ]);
+}
 
 const ACCOUNT_FIELD_MESSAGES = {
   rol: "Sera notificado cuando el administrador apruebe los cambios solicitados.",
@@ -3354,67 +3372,367 @@ function handleAccountFieldEdit(fieldKey) {
     toast("Campo no soportado");
     return;
   }
+  openAccountEditModal(fieldKey, config);
+}
 
-  const textSpan = document.querySelector(`.account-field__text[data-field="${fieldKey}"]`);
-  if (!textSpan) {
+function formatUserCentersList() {
+  const centers = parseCentrosList(state.me?.centros);
+  if (!centers.length) {
+    return [];
+  }
+  const catalog = getCatalogItems("centros", { activeOnly: true });
+  return centers.map((code) => {
+    const normalized = normalizeCentroCode(code);
+    const match = catalog.find((item) => normalizeCentroCode(item.codigo) === normalized);
+    return match ? catalogueOptionLabel(match.codigo, match.nombre, null) : code;
+  });
+}
+
+function renderAccountDetails() {
+  console.log("renderAccountDetails llamada");
+  const section = document.getElementById("accountDetails");
+  if (!section || !state.me) {
     return;
   }
 
-  const currentValue = textSpan.textContent || "";
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = currentValue;
-  input.className = "account-field__input";
-  input.setAttribute("data-field", fieldKey);
+  const user = state.me;
+  const fullName = `${user.nombre || ""} ${user.apellido || ""}`.trim() || (user.id || user.id_spm || "Mi cuenta");
+  const accountFields = ACCOUNT_FIELD_CONFIG.map((field) => {
+    const valueRaw = field.key === "mail" ? user.mail : field.key === "telefono" ? user.telefono : user[field.key];
+    const valueText = String(valueRaw || "").trim() || "Sin informacion";
+    const editButton = `
+      <button type="button" class="account-field__edit" data-field="${field.key}" data-admin="${field.admin ? "1" : "0"}" title="Editar ${escapeHtml(field.label)}">
+        ${ICONS.pencil}
+      </button>
+    `;
+    return `
+      <div class="account-field" data-field="${field.key}">
+        <div class="account-field__label">
+          <span>${escapeHtml(field.label)}</span>
+        </div>
+        <div class="account-field__value">
+          <span>${escapeHtml(valueText)}</span>
+          ${editButton}
+        </div>
+      </div>
+    `;
+  }).join("");
 
-  textSpan.replaceWith(input);
-  input.focus();
-  input.select();
+  const centersList = formatUserCentersList();
+  const centersContent = centersList.length
+    ? centersList.map((label) => `<span class="account-centers__chip">${escapeHtml(label)}</span>`).join("")
+    : '<span class="account-field__empty">Sin centros asignados</span>';
 
-  const saveEdit = async () => {
-    const newValue = input.value.trim();
-    if (newValue === currentValue) {
-      input.replaceWith(textSpan);
-      return;
-    }
-    if (!newValue) {
-      toast("Ingresa un valor valido");
-      input.focus();
-      return;
-    }
-    try {
-      const feedback = await applyAccountFieldChange(fieldKey, newValue, config);
-      textSpan.textContent = newValue;
-      input.replaceWith(textSpan);
-      if (feedback) {
-        toast(feedback, true);
+  section.innerHTML = `
+    <section class="account-card">
+      <header class="account-card__header">
+        <div>
+          <h2>${escapeHtml(fullName)}</h2>
+          <p class="account-card__meta">ID SPM: ${escapeHtml(user.id || user.id_spm || "")}</p>
+        </div>
+      </header>
+      <div class="account-card__fields">
+        ${accountFields}
+      </div>
+      <div class="account-card__centers">
+        <div class="account-field__label">
+          <span>Centros asignados</span>
+        </div>
+        <div class="account-centers__list">
+          ${centersContent}
+          <button type="button" class="account-field__plus" id="accountRequestCenters" title="Solicitar acceso a más centros">
+            <span aria-hidden="true">+</span>
+          </button>
+        </div>
+      </div>
+      <div class="account-card__actions">
+        <button type="button" class="btn ghost" id="accountChangePassword">Cambiar Contraseña</button>
+        <button type="button" class="btn sec" id="requestAccountDeletion">Solicitar baja de cuenta</button>
+      </div>
+    </section>
+  `;
+
+  section.querySelectorAll(".account-field__edit").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = button.dataset.field;
+      if (field) {
+        handleAccountFieldEdit(field);
       }
-    } catch (error) {
-      toast(error?.message || "No se pudo actualizar el campo");
-      input.replaceWith(textSpan);
-    }
-  };
-
-  const cancelEdit = () => {
-    input.replaceWith(textSpan);
-  };
-
-  input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      ev.preventDefault();
-      saveEdit();
-    } else if (ev.key === "Escape") {
-      ev.preventDefault();
-      cancelEdit();
-    }
+    });
   });
 
-  input.addEventListener("blur", saveEdit);
 
-  // Ocultar el botón de editar mientras edita
-  const editBtn = textSpan.parentElement.querySelector(".account-field__edit");
-  if (editBtn) {
-    editBtn.style.display = "none";
+  const changePasswordBtn = document.getElementById("accountChangePassword");
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener("click", requestPasswordChange);
+  }
+
+  const deleteBtn = document.getElementById("requestAccountDeletion");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", requestAccountDeletion);
+  }
+
+  const centersBtn = document.getElementById("accountRequestCenters");
+  if (centersBtn) {
+    centersBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      ensureCentersRequestModal();
+      openCentersRequestModal();
+    });
+  }
+}
+
+function normalizeCentroCode(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function buildCentersRequestOptions() {
+  const ownedValues = parseCentrosList(state.me?.centros);
+  const owned = new Set(ownedValues.map(normalizeCentroCode).filter(Boolean));
+  centersRequestState.existing = owned;
+  const seen = new Set();
+  const options = [];
+  const pushOption = (code, name, description) => {
+    const normalized = normalizeCentroCode(code);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    const cleanName = name ? String(name).trim() : "";
+    const cleanDescription = description ? String(description).trim() : "";
+    const parts = [normalized];
+    if (cleanName && cleanName.toUpperCase() !== normalized) {
+      parts.push(cleanName);
+    }
+    const display = parts.join(" - ");
+    options.push({
+      code: normalized,
+      name: cleanName,
+      description: cleanDescription,
+      label: display,
+      disabled: owned.has(normalized),
+    });
+    seen.add(normalized);
+  };
+  const catalogCentros = getCatalogItems("centros", { activeOnly: true });
+  catalogCentros.forEach((item) => pushOption(item?.codigo, item?.nombre, item?.descripcion));
+  if (!options.length) {
+    DEFAULT_CENTROS.forEach((code) => pushOption(code, null, null));
+  }
+  options.sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true, sensitivity: "base" }));
+  return options;
+}
+
+function ensureCentersRequestModal() {
+  if (centersRequestState.modal) {
+    return centersRequestState.modal;
+  }
+  const modal = document.createElement("div");
+  modal.id = "centersRequestModal";
+  modal.className = "modal hide";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "centersModalTitle");
+  modal.innerHTML = `
+    <div class="modal-content centers-modal" role="document">
+      <button type="button" class="modal-close" id="centersModalClose" aria-label="Cerrar">&times;</button>
+      <h2 id="centersModalTitle">Solicitar acceso a centros</h2>
+      <p class="centers-modal__intro">Selecciona uno o mas centros disponibles y enviaremos la solicitud al equipo administrador.</p>
+      <div class="centers-modal__controls">
+        <label class="centers-modal__search" for="centersModalSearch">
+          <span class="sr-only">Buscar centros</span>
+          <input type="search" id="centersModalSearch" placeholder="Buscar por codigo o nombre" autocomplete="off"/>
+        </label>
+        <span class="centers-modal__summary"><span id="centersSelectedCount">0</span> seleccionados</span>
+      </div>
+      <div class="centers-cascade" id="centersCascadeList" role="listbox" aria-multiselectable="true"></div>
+      <label class="centers-modal__reason-label" for="centersModalReason">Motivo (opcional)</label>
+      <textarea id="centersModalReason" placeholder="Describe por que necesitas acceso a estos centros..." rows="3"></textarea>
+      <div class="centers-modal__footer">
+        <button type="button" class="btn sec" id="centersModalCancel">Cancelar</button>
+        <button type="button" class="btn pri" id="centersModalSubmit" disabled>Solicitar</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) {
+      closeCentersRequestModal();
+    }
+  });
+  document.body.appendChild(modal);
+  modal.querySelector("#centersModalClose")?.addEventListener("click", () => {
+    closeCentersRequestModal();
+  });
+  modal.querySelector("#centersModalCancel")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeCentersRequestModal();
+  });
+  modal.querySelector("#centersModalSubmit")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    submitCentersRequest();
+  });
+  modal.querySelector("#centersModalSearch")?.addEventListener("input", (ev) => {
+    renderCentersCascade(ev.target.value || "");
+  });
+  if (!centersRequestState.keyListenerBound) {
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && centersRequestState.modal && !centersRequestState.modal.classList.contains("hide")) {
+        closeCentersRequestModal();
+      }
+    });
+    centersRequestState.keyListenerBound = true;
+  }
+  centersRequestState.modal = modal;
+  return modal;
+}
+
+function updateCentersSelectionSummary() {
+  const count = centersRequestState.selected.size;
+  const summary = document.getElementById("centersSelectedCount");
+  if (summary) {
+    summary.textContent = String(count);
+  }
+  const submitBtn = document.getElementById("centersModalSubmit");
+  if (submitBtn && !submitBtn.dataset.loading) {
+    submitBtn.disabled = count === 0;
+    submitBtn.textContent = count > 0 ? `Solicitar (${count})` : "Solicitar";
+  }
+}
+
+function renderCentersCascade(searchTerm = "") {
+  const list = document.getElementById("centersCascadeList");
+  if (!list) {
+    return;
+  }
+  const query = String(searchTerm || "").trim().toLowerCase();
+  const options = centersRequestState.options || [];
+  const filtered = options.filter((opt) => {
+    const haystack = `${opt.code} ${opt.name} ${opt.description}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+  if (!filtered.length) {
+    list.innerHTML = '<div class="centers-cascade__empty">No encontramos centros que coincidan con la busqueda.</div>';
+    updateCentersSelectionSummary();
+    return;
+  }
+  const markup = filtered
+    .map((opt) => {
+      const isSelected = centersRequestState.selected.has(opt.code);
+      const disabled = opt.disabled;
+      const classes = ["centers-cascade__option"];
+      if (disabled) classes.push("is-disabled");
+      if (isSelected) classes.push("is-selected");
+      const nameMarkup = opt.name
+        ? `<span class="centers-cascade__name">${escapeHtml(opt.name)}</span>`
+        : "";
+      const descriptionMarkup =
+        opt.description && opt.description !== opt.name
+          ? `<span class="centers-cascade__description">${escapeHtml(opt.description)}</span>`
+          : "";
+      const statusMarkup = disabled ? '<span class="centers-cascade__badge">Ya asignado</span>' : "";
+      return `
+        <label class="${classes.join(" ")}">
+          <div class="centers-cascade__content">
+            <div class="centers-cascade__row">
+              <span class="centers-cascade__code">${escapeHtml(opt.code)}</span>
+
+              ${nameMarkup}
+              ${statusMarkup}
+            </div>
+            ${descriptionMarkup}
+          </div>
+          <div class="centers-cascade__control">
+            <input type="checkbox" value="${escapeHtml(opt.code)}" ${isSelected ? "checked" : ""} ${disabled ? "disabled" : ""}/>
+            <span class="centers-cascade__indicator" aria-hidden="true"></span>
+          </div>
+        </label>
+      `;
+    })
+    .join("");
+  list.innerHTML = markup;
+  list.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const value = normalizeCentroCode(input.value);
+      if (!value) {
+        return;
+      }
+      if (input.checked) {
+        centersRequestState.selected.add(value);
+      } else {
+        centersRequestState.selected.delete(value);
+      }
+      const option = input.closest(".centers-cascade__option");
+      if (option) {
+        option.classList.toggle("is-selected", input.checked);
+      }
+      updateCentersSelectionSummary();
+    });
+  });
+  updateCentersSelectionSummary();
+}
+
+function openCentersRequestModal() {
+  const modal = ensureCentersRequestModal();
+  centersRequestState.selected = new Set();
+  centersRequestState.options = buildCentersRequestOptions();
+  const searchInput = document.getElementById("centersModalSearch");
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  const reasonInput = document.getElementById("centersModalReason");
+  if (reasonInput) {
+    reasonInput.value = "";
+  }
+  renderCentersCascade("");
+  modal.classList.remove("hide");
+  if (searchInput) {
+    searchInput.focus({ preventScroll: true });
+  }
+}
+
+function closeCentersRequestModal() {
+  if (!centersRequestState.modal) {
+    return;
+  }
+  centersRequestState.modal.classList.add("hide");
+  centersRequestState.selected.clear();
+  updateCentersSelectionSummary();
+}
+
+async function submitCentersRequest() {
+  if (!state.me) {
+    toast("Inicia sesion para solicitar centros");
+    return;
+  }
+  const count = centersRequestState.selected.size;
+  if (count === 0) {
+    toast("Selecciona al menos un centro");
+    return;
+  }
+  const centros = Array.from(centersRequestState.selected).join(", ");
+  const reasonInput = document.getElementById("centersModalReason");
+  const motivo = reasonInput ? reasonInput.value.trim() : "";
+  const submitBtn = document.getElementById("centersModalSubmit");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.dataset.loading = "1";
+    submitBtn.textContent = "Enviando...";
+  }
+  try {
+    await api("/me/centros/solicitud", {
+      method: "POST",
+      body: JSON.stringify({ centros, motivo: motivo || null }),
+    });
+    toast("Solicitud enviada al equipo administrador", true);
+    closeCentersRequestModal();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    if (submitBtn) {
+      delete submitBtn.dataset.loading;
+      updateCentersSelectionSummary();
+    }
   }
 }
 
@@ -3484,9 +3802,6 @@ function renderProfileRequests(requests) {
         <button class="btn btn-danger btn-sm" onclick="processProfileRequest(${request.id}, 'reject')">
           <i class="fas fa-times"></i> Rechazar
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="processProfileRequest(${request.id}, 'view')">
-          <i class="fas fa-eye"></i> Ver
-        </button>
       </div>
     </div>
   `).join('');
@@ -3519,27 +3834,1006 @@ async function processProfileRequest(requestId, action) {
   }
 }
 
-// Función para formatear la lista de centros del usuario
-function formatUserCentersList() {
-  const centers = parseCentrosList(state.me?.centros);
-  if (!centers.length) {
-    return [];
+// Inicializar carga de solicitudes cuando se carga la página de administración
+function initAuthPage() {
+  if (authPageInitialized) return;
+  const authContainer = document.getElementById("auth");
+  if (!authContainer) return;
+
+  authPageInitialized = true;
+
+  const handleLogin = (event) => {
+    event.preventDefault();
+    login();
+  };
+
+  const idInput = document.getElementById("id");
+  const passwordInput = document.getElementById("pw");
+  on(document.getElementById("login"), "click", handleLogin);
+  [idInput, passwordInput].forEach((input) => {
+    if (input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          login();
+        }
+      });
+    }
+  });
+
+  on(document.getElementById("register"), "click", (event) => {
+    event.preventDefault();
+    register();
+  });
+
+  on(document.getElementById("recover"), "click", (event) => {
+    event.preventDefault();
+    recover();
+  });
+
+  on(document.getElementById("help"), "click", (event) => {
+    event.preventDefault();
+    help();
+  });
+
+  const registerForm = document.getElementById("registerForm");
+  if (registerForm) {
+    registerForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitRegister();
+    });
   }
-  const catalog = getCatalogItems("centros", { activeOnly: true });
-  return centers.map((code) => {
-    const normalized = normalizeCentroCode(code);
-    const match = catalog.find((item) => normalizeCentroCode(item.codigo) === normalized);
-    return match ? catalogueOptionLabel(match.codigo, match.nombre, null) : code;
+
+  [document.getElementById("registerModalClose"), document.getElementById("registerModalCancel")]
+    .filter(Boolean)
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        closeRegisterModal();
+      });
+    });
+
+  const registerModal = document.getElementById("registerModal");
+  if (registerModal) {
+    registerModal.addEventListener("click", (event) => {
+      if (event.target === registerModal) {
+        closeRegisterModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      const modal = document.getElementById("registerModal");
+      if (modal && !modal.classList.contains("hide")) {
+        event.preventDefault();
+        closeRegisterModal();
+      }
+    }
+  });
+
+  if (idInput) idInput.focus();
+}
+
+// Admin functions
+function initAdminUsuarios() {
+  loadUsuarios();
+}
+
+function initAdminCentros() {
+  loadCentros();
+}
+
+function initAdminMateriales() {
+  loadMateriales();
+}
+
+function initAdminAlmacenes() {
+  loadAlmacenes();
+}
+
+function initAdminConfiguracion() {
+  loadConfiguracion();
+}
+
+async function loadUsuarios() {
+  try {
+    const response = await fetch('/api/admin/usuarios');
+    if (!response.ok) throw new Error('Error al cargar usuarios');
+    const data = await response.json();
+    renderUsuarioTable(data.usuarios || []);
+  } catch (error) {
+    console.error('Error loading usuarios:', error);
+    toast('Error al cargar usuarios');
+  }
+}
+
+function renderUsuarioTable(usuarios) {
+  const tableBody = document.querySelector('#adminUsersTable tbody');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  usuarios.forEach(usuario => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${usuario.id || ''}</td>
+      <td>${usuario.nombre || ''} ${usuario.apellido || ''}</td>
+      <td>${usuario.rol || ''}</td>
+      <td>${usuario.posicion || ''}</td>
+      <td>${usuario.sector || ''}</td>
+      <td>${Array.isArray(usuario.centros) ? usuario.centros.join(', ') : usuario.centros || ''}</td>
+      <td>${usuario.mail || ''}</td>
+    `;
+    row.addEventListener('click', () => selectUsuario(usuario));
+    tableBody.appendChild(row);
+  });
+  
+  // Update total count
+  const totalEl = document.getElementById('adminUserTotal');
+  if (totalEl) totalEl.textContent = `${usuarios.length} usuarios`;
+}
+
+function deleteUsuario(id) {
+  // TODO: Implement delete functionality
+  toast('Función de eliminar usuario no implementada aún');
+}
+
+async function loadCentros() {
+  try {
+    const response = await fetch('/api/admin/centros');
+    if (!response.ok) throw new Error('Error al cargar centros');
+    const data = await response.json();
+    
+    // Render solicitudes por centro
+    renderCentrosSolicitudes(data.solicitudes || []);
+    
+    // Render presupuestos
+    renderCentrosPresupuestos(data.presupuestos || []);
+  } catch (error) {
+    console.error('Error loading centros:', error);
+    toast('Error al cargar centros');
+  }
+}
+
+function renderCentrosSolicitudes(solicitudes) {
+  const tableBody = document.querySelector('#adminCentrosSolicitudes tbody');
+  const emptyMsg = document.getElementById('adminCentrosSolicitudesEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (solicitudes.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  solicitudes.forEach(solicitud => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${solicitud.centro || ''}</td>
+      <td>${solicitud.total || 0}</td>
+      <td>$${solicitud.monto ? solicitud.monto.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
   });
 }
 
-function normalizeCentroCode(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
+function renderCentrosPresupuestos(presupuestos) {
+  const tableBody = document.querySelector('#adminCentrosPresupuestos tbody');
+  const emptyMsg = document.getElementById('adminCentrosPresupuestosEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (presupuestos.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  presupuestos.forEach(presupuesto => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${presupuesto.centro || ''}</td>
+      <td>${presupuesto.sector || ''}</td>
+      <td>$${presupuesto.monto_usd ? presupuesto.monto_usd.toFixed(2) : '0.00'}</td>
+      <td>$${presupuesto.saldo_usd ? presupuesto.saldo_usd.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
+  });
 }
 
-// Funciones para gestiÃ³n de solicitudes de perfil por administradores
+async function loadMateriales() {
+  try {
+    const response = await fetch('/api/admin/materiales');
+    if (!response.ok) throw new Error('Error al cargar materiales');
+    const data = await response.json();
+    renderMaterialesTable(data.items || []);
+    
+    // Update total count
+    const totalEl = document.getElementById('adminMaterialTotal');
+    if (totalEl) totalEl.textContent = `${data.total || 0} materiales`;
+  } catch (error) {
+    console.error('Error loading materiales:', error);
+    toast('Error al cargar materiales');
+  }
+}
+
+function renderMaterialesTable(materiales) {
+  const tableBody = document.querySelector('#adminMaterialTable tbody');
+  const emptyMsg = document.getElementById('adminMaterialEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (materiales.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  materiales.forEach(material => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${material.codigo || ''}</td>
+      <td>${material.descripcion || ''}</td>
+      <td>${material.unidad || ''}</td>
+      <td>$${material.precio_usd ? material.precio_usd.toFixed(2) : '0.00'}</td>
+      <td>${material.centro || ''}</td>
+      <td>${material.sector || ''}</td>
+    `;
+    row.addEventListener('click', () => selectMaterial(material));
+    tableBody.appendChild(row);
+  });
+}
+
+function selectMaterial(material) {
+  // TODO: Implement material selection and form population
+  toast('Selección de material no implementada aún');
+}
+
+async function loadAlmacenes() {
+  try {
+    const response = await fetch('/api/admin/almacenes');
+    if (!response.ok) throw new Error('Error al cargar almacenes');
+    const data = await response.json();
+    renderAlmacenesTable(data.items || []);
+  } catch (error) {
+    console.error('Error loading almacenes:', error);
+    toast('Error al cargar almacenes');
+  }
+}
+
+function renderAlmacenesTable(almacenes) {
+  const tableBody = document.querySelector('#adminAlmacenesTable tbody');
+  const emptyMsg = document.getElementById('adminAlmacenesEmpty');
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (almacenes.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  almacenes.forEach(almacen => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${almacen.almacen || ''}</td>
+      <td>${almacen.total || 0}</td>
+      <td>$${almacen.monto ? almacen.monto.toFixed(2) : '0.00'}</td>
+    `;
+    tableBody.appendChild(row);
+  });
+}
+
+async function loadConfiguracion() {
+  try {
+    const response = await fetch('/api/admin/config');
+    if (!response.ok) throw new Error('Error al cargar configuración');
+    const data = await response.json();
+    
+    // Render each config section
+    Object.keys(data.data || {}).forEach(resource => {
+      renderConfigTable(resource, data.data[resource]);
+    });
+  } catch (error) {
+    console.error('Error loading configuracion:', error);
+    toast('Error al cargar configuración');
+  }
+}
+
+function renderConfigTable(resource, items) {
+  const tableBody = document.querySelector(`table[data-config-table="${resource}"] tbody`);
+  const emptyMsg = document.querySelector(`p[data-config-empty="${resource}"]`);
+  if (!tableBody) return;
+  
+  tableBody.innerHTML = '';
+  
+  if (items.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  
+  items.forEach(item => {
+    const row = document.createElement('tr');
+    // Different columns based on resource
+    if (resource === 'centros') {
+      row.innerHTML = `
+        <td>${item.codigo || ''}</td>
+        <td>${item.nombre || ''}</td>
+        <td>${item.descripcion || ''}</td>
+        <td>${item.notas || ''}</td>
+        <td>${item.activo ? 'Activo' : 'Inactivo'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary edit-btn" data-resource="${resource}" data-id="${item.id}">Editar</button>
+          <button class="btn btn-sm btn-danger delete-btn" data-resource="${resource}" data-id="${item.id}">Eliminar</button>
+        </td>
+      `;
+    } else if (resource === 'almacenes') {
+      row.innerHTML = `
+        <td>${item.codigo || ''}</td>
+        <td>${item.nombre || ''}</td>
+        <td>${item.centro_codigo || ''}</td>
+        <td>${item.descripcion || ''}</td>
+        <td>${item.activo ? 'Activo' : 'Inactivo'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary edit-btn" data-resource="${resource}" data-id="${item.id}">Editar</button>
+          <button class="btn btn-sm btn-danger delete-btn" data-resource="${resource}" data-id="${item.id}">Eliminar</button>
+        </td>
+      `;
+    }
+    // Add more resources as needed
+    
+    tableBody.appendChild(row);
+  });
+  
+  // Bind events
+  tableBody.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => editConfigItem(btn.dataset.resource, btn.dataset.id));
+  });
+  tableBody.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteConfigItem(btn.dataset.resource, btn.dataset.id));
+  });
+}
+
+function editConfigItem(resource, id) {
+  // TODO: Implement edit functionality
+  toast(`Función de editar ${resource} no implementada aún`);
+}
+
+function deleteConfigItem(resource, id) {
+  // TODO: Implement delete functionality
+  toast(`Función de eliminar ${resource} no implementada aún`);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const rawPage = window.location.pathname.split("/").pop();
+  const currentPage = rawPage && rawPage.length ? rawPage : "index.html";
+
+  if (currentPage === "index.html") {
+    initAuthPage();
+  } else {
+    me().then(async () => {
+      if (!state.me) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      const preferences = ensurePreferencesLoaded();
+
+      if (currentPage === "home.html") {
+        const userName = `${state.me.nombre} ${state.me.apellido}`.trim();
+        const userNameNode = document.getElementById("userName");
+        if (userNameNode) userNameNode.textContent = userName;
+        initHomeHero(userName);
+        const isAdmin = typeof state.me?.rol === "string" && (state.me.rol.toLowerCase().includes("admin") || state.me.rol.toLowerCase().includes("administrador"));
+        if (isAdmin) {
+          initSystemConsole();
+        }
+      }
+
+      if (currentPage === "admin-solicitudes.html") {
+        loadProfileRequests();
+      }
+
+      if (currentPage === "admin-usuarios.html") {
+        initAdminUsuarios();
+      }
+
+      if (currentPage === "admin-centros.html") {
+        initAdminCentros();
+      }
+
+      if (currentPage === "admin-materiales.html") {
+        initAdminMateriales();
+      }
+
+      if (currentPage === "admin-almacenes.html") {
+        initAdminAlmacenes();
+      }
+
+      if (currentPage === "admin-configuracion.html") {
+        initAdminConfiguracion();
+      }
+
+      if (currentPage === "mi-cuenta.html") {
+        document.body.classList.add('page-mi-cuenta');
+        try {
+          await loadCatalogData();
+          renderAccountDetails();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudieron cargar los datos de la cuenta");
+        }
+      }
+
+      if (currentPage === "crear-solicitud.html") {
+        try {
+          await initCreateSolicitudPage();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudo inicializar el formulario de solicitud");
+        }
+      }
+
+      if (currentPage === "agregar-materiales.html") {
+        try {
+          await initAddMaterialsPage();
+        } catch (error) {
+          console.error(error);
+          toast(error?.message || "No se pudo inicializar la página de agregar materiales");
+        }
+      }
+
+      if (currentPage === "mi-cuenta.html") {
+        renderAccountDetails();
+      }
+
+      if (currentPage === "preferencias.html") {
+        initPreferencesPage();
+      }
+
+      applyPreferences(preferences);
+      finalizePage();
+    }).catch(() => {
+      window.location.href = "index.html";
+    });
+  }
+});
+
+// Controlar visibilidad del menú según el rol
+function updateMenuVisibility() {
+  // Asegurarse de que el DOM esté listo
+  if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+    setTimeout(updateMenuVisibility, 100);
+    return;
+  }
+
+  const adminMenuItem = document.getElementById("adminMenuItem");
+  const plannerMenuItem = document.getElementById("plannerMenuItem");
+  const approverMenuItem = document.getElementById("approverMenuItem");
+  const navPresupuesto = document.getElementById("navPresupuesto");
+  const systemConsole = document.getElementById("systemConsole");
+
+  // Si ningún elemento existe aún, reintentar
+  if (!adminMenuItem && !plannerMenuItem && !approverMenuItem && !navPresupuesto && !systemConsole) {
+    setTimeout(updateMenuVisibility, 100);
+    return;
+  }
+
+  const rawUserRole = state.me?.rol;
+  const userRole = rawUserRole?.toLowerCase()?.trim();
+
+  // Lógica específica para rol "solicitante"
+  if (userRole === "solicitante") {
+    // Para solicitante: mostrar solo Inicio, Solicitudes, Notificaciones y Presupuesto
+    // Ocultar Panel de control, Planificador y Aprobaciones
+    if (adminMenuItem) adminMenuItem.classList.add("hide");
+    if (plannerMenuItem) plannerMenuItem.classList.add("hide");
+    if (approverMenuItem) approverMenuItem.classList.add("hide");
+    // Mostrar presupuesto para solicitante
+    if (navPresupuesto) navPresupuesto.classList.remove("hide");
+    if (systemConsole) systemConsole.classList.add("hide");
+    return;
+  }
+
+  // Lógica existente para otros roles
+  // Admin - mostrar solo si incluye admin o administrador
+  if (adminMenuItem) {
+    const shouldShowAdmin = userRole && (userRole.includes("admin") || userRole.includes("administrador"));
+    if (shouldShowAdmin) {
+      adminMenuItem.classList.remove("hide");
+    } else {
+      adminMenuItem.classList.add("hide");
+    }
+  }
+
+  // Planificador - mostrar solo si incluye planificador
+  if (plannerMenuItem) {
+    const shouldShowPlanner = userRole && userRole.includes("planificador");
+    if (shouldShowPlanner) {
+      plannerMenuItem.classList.remove("hide");
+    } else {
+      plannerMenuItem.classList.add("hide");
+    }
+  }
+
+  // Aprobador - mostrar solo si incluye aprobador
+  if (approverMenuItem) {
+    const shouldShowApprover = userRole && userRole.includes("aprobador");
+    if (shouldShowApprover) {
+      approverMenuItem.classList.remove("hide");
+    } else {
+      approverMenuItem.classList.add("hide");
+    }
+  }
+
+  // Presupuesto - mostrar para roles que no sean solicitante (ya que solicitante tiene lógica específica arriba)
+  if (navPresupuesto) {
+    // Mostrar presupuesto para admin, planificador, aprobador y otros roles
+    // Solo ocultar para solicitante (que ya se maneja arriba)
+    if (userRole && userRole !== "solicitante") {
+      navPresupuesto.classList.remove("hide");
+    }
+  }
+
+  if (systemConsole) {
+    const shouldShowConsole = userRole && (userRole.includes("admin") || userRole.includes("administrador"));
+    systemConsole.classList.toggle("hide", !shouldShowConsole);
+  }
+}
+
+// Llamar a la funciÃ³n cuando se actualiza el estado de las notificaciones
+const originalRenderNotificationsPage = renderNotificationsPage;
+renderNotificationsPage = function(data) {
+  originalRenderNotificationsPage(data);
+  updateMenuVisibility();
+};
+
+// ====== SHIMS DE COMPATIBILIDAD (parche rÃ¡pido) ======
+var fmtMoney   = typeof fmtMoney   === "function" ? fmtMoney   : (v) => formatCurrency(v);
+var fmtDateTime= typeof fmtDateTime=== "function" ? fmtDateTime: (v) => formatDateTime(v);
+var fmtNumber  = typeof fmtNumber  === "function" ? fmtNumber  : (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString("es-AR") : String(v ?? "");
+};
+var esc        = typeof esc        === "function" ? esc        : (s) => escapeHtml(s);
+
+var toastOk    = typeof toastOk    === "function" ? toastOk    : (m) => toast(m, true);
+var toastErr   = typeof toastErr   === "function" ? toastErr   : (e) => {
+  const msg = e?.message || String(e || "Error");
+  toast(msg);
+  console.error(e);
+};
+var toastInfo  = typeof toastInfo  === "function" ? toastInfo  : (m) => toast(m);
+
+var skeletonize = typeof skeletonize === "function" ? skeletonize : (sel, opts) => showTableSkeleton(sel, opts);
+// =====================================================
+
+// Módulo Planificador
+(function initPlanificador() {
+  if (!/planificador\.html$/.test(location.pathname)) return;
+
+  // Adjust padding for planificador page
+  const mainEl = document.querySelector("main");
+  if (mainEl) {
+    mainEl.style.paddingTop = "7rem"; // Increase by 50px (6.5rem + 0.5rem)
+  }
+
+  const state = {
+    pageMias: 0, pagePend: 0, limit: 20,
+    filtros: { centro:"", sector:"", almacen:"", criticidad:"", q:"" },
+    detalle: null // { id, solicitud, tratamiento, dirty: Set(item_index) }
+  };
+
+  // UI refs
+  const tblMias = $("#tblMias tbody");
+  const tblPend = $("#tblPend tbody");
+  const dlg = $("#dlgDetalle");
+  const detMsg = $("#detMsg");
+  const detId = $("#detId");
+  const detMeta = $("#detMeta");
+  const tblItems = $("#tblItems tbody");
+
+  // Eventos de filtros y paginaciÃ³n
+  $("#frmFilters").addEventListener("submit", (e)=>{ e.preventDefault(); state.pageMias=0; state.pagePend=0; loadQueues(); });
+  $("#btnLimpiar").addEventListener("click", ()=>{ /* limpia inputs y reload */ loadQueues(); });
+  $("#pgPrevMias").onclick = ()=>{ state.pageMias = Math.max(0, state.pageMias-1); loadQueues({only:"mias"}); };
+  $("#pgNextMias").onclick = ()=>{ state.pageMias += 1; loadQueues({only:"mias"}); };
+  $("#pgPrevPend").onclick = ()=>{ state.pagePend = Math.max(0, state.pagePend-1); loadQueues({only:"pend"}); };
+  $("#pgNextPend").onclick = ()=>{ state.pagePend += 1; loadQueues({only:"pend"}); };
+
+  async function loadQueues(opts={}) {
+    skeletonize("#tblMias", {rows:8});
+    skeletonize("#tblPend", {rows:8});
+    const q = new URLSearchParams({
+      limit: state.limit,
+      offset_mias: state.pageMias*state.limit,
+      offset_pend: state.pagePend*state.limit,
+      centro: $("#fCentro").value.trim(),
+      sector: $("#fSector").value.trim(),
+      almacen_virtual: $("#fAlmacen").value.trim(),
+      criticidad: $("#fCriticidad").value,
+      q: $("#fQ").value.trim()
+    });
+    const data = await api(`/planificador/queue?${q.toString()}`);
+    renderQueue(data, opts.only);
+  }
+
+  function renderQueue(data, only) {
+    if (!only || only==="mias") {
+      tblMias.innerHTML = data.mias.map(rowToHtml).join("");
+      attachRowActions("#tblMias");
+      $("#pgInfoMias").textContent = `${data.count.mias} total`;
+    }
+    if (!only || only==="pend") {
+      tblPend.innerHTML = data.pendientes.map(rowToHtml).join("");
+      attachRowActions("#tblPend", {pendientes:true});
+      $("#pgInfoPend").textContent = `${data.count.pendientes} total`;
+    }
+    refreshSortableTables();
+  }
+
+  function rowToHtml(r) {
+    const btn = r.planner_id ?
+      `<button class="btn sm view" data-action="ver" data-id="${r.id}">Ver/Editar</button>
+       <button class="btn sm ghost liberar" data-action="liberar" data-id="${r.id}">Liberar</button>` :
+      `<button class="btn sm take" data-action="tomar" data-id="${r.id}">Tomar</button>`;
+    return `
+      <tr>
+        <td>${r.id}</td>
+        <td>${esc(r.centro)}</td>
+        <td>${esc(r.sector)}</td>
+        <td>${esc(r.criticidad || "-")}</td>
+        <td class="num">${fmtMoney(r.total_monto)}</td>
+        <td>${fmtDateTime(r.updated_at)}</td>
+        <td class="end">${btn}</td>
+      </tr>`;
+  }
+
+  function attachRowActions(sel, opts={}) {
+    document.querySelectorAll(`${sel} [data-action]`).forEach((btn)=>{
+      btn.addEventListener("click", async ()=>{
+        const id = Number(btn.dataset.id);
+        const action = btn.dataset.action;
+        try {
+          if (action==="tomar") {
+            await api(`/planificador/solicitudes/${id}/tomar`, {method:"PATCH"});
+            await loadQueues({only:"pend"});
+            await openDetalle(id);
+          } else if (action==="liberar") {
+            await api(`/planificador/solicitudes/${id}/liberar`, {method:"PATCH"});
+            await openDetalle(id);
+          }
+        } catch (err) { toastErr(err); }
+      });
+    });
+  }
+
+  async function openDetalle(id) {
+    detMsg.textContent = "";
+    const data = await api(`/planificador/solicitudes/${id}/tratamiento`);
+    state.detalle = { id, data, dirty: new Set() };
+    detId.textContent = `#${id}`;
+    detMeta.innerHTML = renderMeta(data.solicitud);
+    tblItems.innerHTML = data.solicitud.items.map((it, idx)=>itemRow(it, idx, data.tratamiento)).join("");
+    dlg.classList.remove("hide");
+    bindItemInputs();
+  }
+
+  function renderMeta(s) {
+    return `
+      <div><b>Centro:</b> ${esc(s.centro)} | <b>Sector:</b> ${esc(s.sector)} | <b>Criticidad:</b> ${esc(s.criticidad || "-")}</div>
+      <div><b>JustificaciÃ³n:</b> ${esc(s.justificacion || "-")}</div>
+      <div><b>Total estimado:</b> <span id="detTotal">${fmtMoney(s.total_monto || 0)}</span></div>
+    `;
+  }
+
+  function itemRow(it, idx, trat=[]) {
+    const tr = trat.find(x=>x.item_index===idx) || {};
+    return `
+      <tr data-index="${idx}">
+        <td>${idx+1}</td>
+        <td>${esc(it.codigo)}</td>
+        <td>${esc(it.descripcion || "")}</td>
+        <td>${esc(it.unidad || "")}</td>
+        <td class="num">${fmtNumber(it.cantidad)}</td>
+        <td class="num">${fmtMoney(it.precio_unitario || 0)}</td>
+        <td>
+          <select class="decision">
+            ${opt("stock", tr.decision)}${opt("compra", tr.decision)}${opt("servicio", tr.decision)}${opt("equivalente", tr.decision)}
+          </select>
+        </td>
+        <td><input class="cantAprob" type="number" min="0.0001" step="0.0001" value="${tr.cantidad_aprobada ?? it.cantidad}"/></td>
+        <td><input class="eqvCodigo" value="${esc(tr.codigo_equivalente || "")}"/></td>
+        <td><input class="proveedor" value="${esc(tr.proveedor_sugerido || "")}"/></td>
+        <td><input class="precioEst" type="number" min="0" step="0.0001" value="${tr.precio_unitario_estimado ?? (it.precio_unitario || 0)}"/></td>
+        <td><input class="comentario" value="${esc(tr.comentario || "")}"/></td>
+      </tr>`;
+  }
+  const opt = (v, cur)=>`<option value="${v}" ${cur===v?"selected":""}>${v}</option>`;
+
+  function bindItemInputs() {
+    tblItems.querySelectorAll("input,select").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const tr = inp.closest("tr"); const idx = Number(tr.dataset.index);
+        state.detalle.dirty.add(idx);
+        recalcTotal();
+      });
+    });
+    $("#btnGuardarItems").onclick = saveItems;
+    $("#btnFinalizar").onclick = finalizar;
+    $("#btnRechazar").onclick = rechazar;
+    $("#btnLiberar").onclick = liberar;
+    $("#btnCerrar").onclick = ()=> dlg.classList.add("hide");
+    $("#btnAISuggestions").onclick = loadAISuggestions;
+  }
+
+  async function loadAISuggestions() {
+    const id = state.detalle.id;
+    try {
+      const data = await api(`/ai/suggest/solicitud/${id}`);
+      renderAISuggestions(data.suggestions);
+      $("#aiPanel").classList.remove("hide");
+    } catch (err) {
+      toastErr(err);
+    }
+  }
+
+  function renderAISuggestions(suggestions) {
+    const container = $("#aiSuggestions");
+    container.innerHTML = suggestions.map(s => `
+      <div class="ai-suggestion ${getConfidenceClass(s.confidence)}">
+        <div class="ai-suggestion__header">
+          <div class="ai-suggestion__title">${esc(s.title)}</div>
+          <div class="ai-suggestion__confidence">${Math.round(s.confidence * 100)}%</div>
+        </div>
+        <div class="ai-suggestion__reason">${esc(s.reason)}</div>
+        <div class="ai-suggestion__sources">
+          ${s.sources.map(src => `<span class="ai-suggestion__source">${esc(src)}</span>`).join("")}
+        </div>
+        <div class="ai-suggestion__actions">
+          <button class="ai-suggestion__apply" data-type="${s.type}" data-payload='${JSON.stringify(s.payload)}' data-item-index="${s.item_index}">Aplicar</button>
+          <button class="ai-suggestion__reject" data-type="${s.type}" data-item-index="${s.item_index}">Descartar</button>
+        </div>
+      </div>
+    `).join("");
+
+    // Bind events
+    container.querySelectorAll(".ai-suggestion__apply").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyAISuggestion(
+          btn.dataset.type,
+          JSON.parse(btn.dataset.payload),
+          Number(btn.dataset.itemIndex)
+        );
+      });
+    });
+    container.querySelectorAll(".ai-suggestion__reject").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        rejectAISuggestion(btn.dataset.type, Number(btn.dataset.itemIndex), ev);
+      });
+    });
+  }
+
+  function getConfidenceClass(conf) {
+    if (conf >= 0.8) return "high-confidence";
+    if (conf >= 0.6) return "medium-confidence";
+    return "low-confidence";
+  }
+
+  async function applyAISuggestion(type, payload, itemIndex) {
+    const id = state.detalle.id;
+    try {
+      await api("/ai/suggest/accept", {
+        method: "POST",
+        body: JSON.stringify({ solicitud_id: id, item_index: itemIndex, type, payload })
+      });
+      toastOk("Sugerencia aplicada");
+      // Refresh detalle
+      await openDetalle(id);
+    } catch (err) {
+      toastErr(err);
+    }
+  }
+
+  async function rejectAISuggestion(type, itemIndex, ev) {
+    const id = state.detalle.id;
+    try {
+      await api("/ai/suggest/reject", {
+        method: "POST",
+        body: JSON.stringify({ solicitud_id: id, item_index: itemIndex, type })
+      });
+      toastOk("Sugerencia descartada");
+      // Remove from UI
+      const suggestion = ev?.currentTarget?.closest(".ai-suggestion");
+      if (suggestion) suggestion.remove();
+    } catch (err) {
+      toastErr(err);
+    }
+  }
+
+  function recalcTotal() {
+    let total = 0;
+    tblItems.querySelectorAll("tr").forEach(tr=>{
+      const dec = tr.querySelector(".decision").value;
+      const cant = Number(tr.querySelector(".cantAprob").value || 0);
+      const precio = Number(tr.querySelector(".precioEst").value || 0);
+      if (dec==="compra" || dec==="equivalente") total += cant * precio;
+    });
+    $("#detTotal").textContent = fmtMoney(total);
+  }
+
+  async function saveItems() {
+    const id = state.detalle?.id;
+    if (!id) return;
+    const items = [];
+    state.detalle.dirty.forEach(idx=>{
+      const tr = tblItems.querySelector(`tr[data-index="${idx}"]`);
+      if (!tr) return;
+      const cantidad = Number(tr.querySelector(".cantAprob")?.value);
+      const precio = Number(tr.querySelector(".precioEst")?.value);
+      items.push({
+        item_index: idx,
+        decision: tr.querySelector(".decision")?.value || "stock",
+        cantidad_aprobada: Number.isFinite(cantidad) ? cantidad : 0,
+        codigo_equivalente: tr.querySelector(".eqvCodigo")?.value?.trim() || null,
+        proveedor_sugerido: tr.querySelector(".proveedor")?.value?.trim() || null,
+        precio_unitario_estimado: Number.isFinite(precio) ? precio : null,
+        comentario: tr.querySelector(".comentario")?.value?.trim() || "",
+      });
+    });
+    if (!items.length) {
+      toastInfo("No hay cambios para guardar");
+      return;
+    }
+    try {
+      await api(`/planificador/solicitudes/${id}/items`, {
+        method: "PATCH",
+        body: JSON.stringify({ items }),
+      });
+      state.detalle.dirty.clear();
+      toastOk("Cambios guardados");
+      await openDetalle(id);
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo guardar";
+    }
+  }
+
+  async function finalizar() {
+    const id = state.detalle?.id;
+    if (!id) return;
+    try {
+      await api(`/planificador/solicitudes/${id}/finalizar`, { method: "POST" });
+      toastOk("Solicitud finalizada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+      await loadStats();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo finalizar";
+    }
+  }
+
+  async function rechazar() {
+    const id = state.detalle?.id;
+    if (!id) return;
+    const motivo = window.prompt("Indicar motivo del rechazo");
+    if (!motivo || motivo.trim().length < 3) {
+      toastInfo("Motivo demasiado corto");
+      return;
+    }
+    try {
+      await api(`/planificador/solicitudes/${id}/rechazar`, {
+        method: "POST",
+        body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      toastOk("Solicitud rechazada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+      await loadStats();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo rechazar";
+    }
+  }
+
+  async function liberar() {
+    const id = state.detalle?.id;
+    if (!id) return;
+    try {
+      await api(`/planificador/solicitudes/${id}/liberar`, { method: "PATCH" });
+      toastOk("Solicitud liberada");
+      dlg.classList.add("hide");
+      state.detalle = null;
+      await loadQueues();
+    } catch (err) {
+      toastErr(err);
+      detMsg.textContent = err?.message || "No se pudo liberar";
+    }
+  }
+
+  const statsCards = $("#statsCards");
+  const statsTableBody = document.querySelector("#tblTopCentros tbody");
+  const statsForm = $("#frmStats");
+
+  function renderStats(data) {
+    const kpis = data?.kpis || {};
+    if (statsCards) {
+      statsCards.innerHTML = `
+        <article class="card">
+          <h4>En tratamiento</h4>
+          <p>${kpis.en_tratamiento ?? 0}</p>
+        </article>
+        <article class="card">
+          <h4>Finalizadas</h4>
+          <p>${kpis.finalizadas ?? 0}</p>
+        </article>
+        <article class="card">
+          <h4>Rechazadas</h4>
+          <p>${kpis.rechazadas ?? 0}</p>
+        </article>
+      `;
+    }
+    if (statsTableBody) {
+      const rows = Array.isArray(data?.top_centros) ? data.top_centros : [];
+      statsTableBody.innerHTML = rows.length
+        ? rows.map((row) => `
+            <tr>
+              <td>${esc(row.centro)}</td>
+              <td>${row.count ?? 0}</td>
+              <td class="num">${fmtMoney(row.monto ?? 0)}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="3">Sin datos</td></tr>`;
+    }
+  }
+
+  async function loadStats() {
+    if (!statsCards && !statsTableBody) return;
+    const desde = $("#sDesde")?.value || "";
+    const hasta = $("#sHasta")?.value || "";
+    const params = new URLSearchParams();
+    if (desde) params.set("desde", desde);
+    if (hasta) params.set("hasta", hasta);
+    try {
+      const data = await api(`/planificador/estadisticas?${params.toString()}`);
+      if (data?.ok === false) {
+        throw new Error(data?.error?.message || "No se pudieron cargar las estadisticas");
+      }
+      renderStats(data);
+    } catch (err) {
+      toastErr(err);
+      if (statsCards) {
+        statsCards.innerHTML = `<article class="card error">No se pudieron cargar las estadisticas</article>`;
+      }
+    }
+  }
+
+  if (statsForm) {
+    statsForm.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      loadStats();
+    });
+  }
+
+  loadQueues();
+  loadStats();
+  updateMenuVisibility();
+})();
 
 
 
