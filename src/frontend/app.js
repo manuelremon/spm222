@@ -3938,10 +3938,8 @@ function initAdminConfiguracion() {
 
 async function loadUsuarios() {
   try {
-    const response = await fetch('/api/admin/usuarios');
-    if (!response.ok) throw new Error('Error al cargar usuarios');
-    const data = await response.json();
-    renderUsuarioTable(data.usuarios || []);
+    const data = await api('/admin/usuarios');
+    renderUsuarioTable(data.items || []);
   } catch (error) {
     console.error('Error loading usuarios:', error);
     toast('Error al cargar usuarios');
@@ -3981,9 +3979,7 @@ function deleteUsuario(id) {
 
 async function loadCentros() {
   try {
-    const response = await fetch('/api/admin/centros');
-    if (!response.ok) throw new Error('Error al cargar centros');
-    const data = await response.json();
+    const data = await api('/admin/centros');
     
     // Render solicitudes por centro
     renderCentrosSolicitudes(data.solicitudes || []);
@@ -4049,9 +4045,7 @@ function renderCentrosPresupuestos(presupuestos) {
 
 async function loadMateriales() {
   try {
-    const response = await fetch('/api/admin/materiales');
-    if (!response.ok) throw new Error('Error al cargar materiales');
-    const data = await response.json();
+    const data = await api('/admin/materiales');
     renderMaterialesTable(data.items || []);
     
     // Update total count
@@ -4099,9 +4093,7 @@ function selectMaterial(material) {
 
 async function loadAlmacenes() {
   try {
-    const response = await fetch('/api/admin/almacenes');
-    if (!response.ok) throw new Error('Error al cargar almacenes');
-    const data = await response.json();
+    const data = await api('/admin/almacenes');
     renderAlmacenesTable(data.items || []);
   } catch (error) {
     console.error('Error loading almacenes:', error);
@@ -4136,9 +4128,7 @@ function renderAlmacenesTable(almacenes) {
 
 async function loadConfiguracion() {
   try {
-    const response = await fetch('/api/admin/config');
-    if (!response.ok) throw new Error('Error al cargar configuración');
-    const data = await response.json();
+    const data = await api('/admin/config');
     
     // Render each config section
     Object.keys(data.data || {}).forEach(resource => {
