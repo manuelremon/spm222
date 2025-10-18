@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 from flask import Blueprint, request, jsonify, make_response
 from ..db import get_connection
 from ..schemas import (
@@ -56,7 +57,7 @@ def login():
             "gerente1": row_dict.get("gerente1"),
             "gerente2": row_dict.get("gerente2"),
             "centros": centros,
-        }})
+        }, "token": token})
         resp.set_cookie(COOKIE_NAME, token, **_cookie_args())
         return resp
 
@@ -100,11 +101,15 @@ def register():
 def me():
     token = request.cookies.get(COOKIE_NAME)
     if not token:
-        return {"ok": False, "error": {"code": "NOAUTH", "message": "No autenticado"}}, 401
-    try:
-        data = verify_access_token(token)
-    except Exception:
-        return {"ok": False, "error": {"code": "BADTOKEN", "message": "Token inválido o expirado"}}, 401
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+    else:
+        try:
+            data = verify_access_token(token)
+        except Exception as e:
+            logging.error(f"Token verification failed: {str(e)}")
+            return {"ok": False, "error": {"code": "BADTOKEN", "message": "Token inválido o expirado"}}, 401
     with get_connection() as con:
         cur = con.execute(
             """
@@ -138,6 +143,7 @@ def me():
             "gerente2": row_dict.get("gerente2"),
             "centros": centros,
         }
+        logging.info(f"User {data['sub']} accessed /me successfully")
         return {"ok": True, "usuario": payload}
 
 
@@ -233,3 +239,51 @@ def request_additional_centers():
             notified.add(dest)
         con.commit()
     return {"ok": True}
+
+
+@bp.route("/request_account_deletion", methods=["POST"])
+def request_account_deletion():
+    user_id = get_current_user_id()
+    if not user_id:
+        return jsonify({"ok": False, "error": {"code": "AUTH", "message": "No autorizado"}}), 401
+
+    # Verificar si tiene tareas pendientes
+    with get_connection() as con:
+        # Buscar solicitudes asignadas al usuario que no estén completadas
+        pending_solicitudes = con.execute("""
+            SELECT id, estado FROM solicitudes 
+            WHERE asignado_a = ? AND estado NOT IN ('Completada', 'Rechazada', 'Cancelada')
+        """, (user_id,)).fetchall()
+
+        if pending_solicitudes:
+            # Derivar al admin: cambiar asignado_a a admin
+            admin_user = con.execute("SELECT id_spm FROM usuarios WHERE rol LIKE '%admin%' LIMIT 1").fetchone()
+            if admin_user:
+                for sol in pending_solicitudes:
+                    con.execute("UPDATE solicitudes SET asignado_a = ? WHERE id = ?", (admin_user[0], sol[0]))
+                    # Notificar al admin
+                    con.execute("""
+                        INSERT INTO notificaciones (destinatario_id, solicitud_id, mensaje, leido) 
+                        VALUES (?, ?, ?, 0)
+                    """, (admin_user[0], sol[0], f"Solicitud #{sol[0]} derivada por eliminación de cuenta del usuario {user_id}"))
+
+        # Marcar la cuenta para eliminación (o enviar email)
+        # Por ahora, solo registrar en logs o notificar
+        con.execute("""
+            INSERT INTO notificaciones (destinatario_id, solicitud_id, mensaje, leido) 
+            VALUES ((SELECT id_spm FROM usuarios WHERE rol LIKE '%admin%' LIMIT 1), NULL, 
+                    'Solicitud de eliminación de cuenta de usuario: ' || ?, 0)
+        """, (user_id,))
+
+    return jsonify({"ok": True, "message": "Solicitud de eliminación enviada. Un administrador revisará tu petición."})
+
+
+def get_current_user_id():
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return None
+    try:
+        payload = verify_access_token(token)
+        return payload.get("sub")
+    except Exception:
+        return None

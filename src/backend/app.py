@@ -1,26 +1,25 @@
-
 from __future__ import annotations
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from flask import Flask, jsonify, request, g
 from flask import current_app
-from flask_cors import CORS
+from flask_cors import CORS  # type: ignore
 import logging
 from logging.handlers import RotatingFileHandler
-from backend.config import Settings
-from backend.db import health_ok
-from backend.routes.auth import bp as auth_bp
-from backend.routes.materiales import bp as mat_bp
-from backend.routes.solicitudes import bp as sol_bp
-from backend.routes.notificaciones import bp as notif_bp
-from backend.routes.admin import bp as admin_bp
-from backend.routes.presupuestos import bp as presup_bp
+from backend.config import Settings  # type: ignore
+from backend.db import health_ok  # type: ignore
+from backend.routes.auth import bp as auth_bp  # type: ignore
+from backend.routes.materiales import bp as mat_bp  # type: ignore
+from backend.routes.solicitudes import bp as sol_bp  # type: ignore
+from backend.routes.notificaciones import bp as notif_bp  # type: ignore
+from backend.routes.admin import bp as admin_bp  # type: ignore
+from backend.routes.presupuestos import bp as presup_bp  # type: ignore
 # from backend.routes.chatbot import bp as chatbot_bp  # Temporalmente comentado para testing
-from backend.routes.catalogos import bp as catalogos_bp
-from backend.routes.archivos import bp as archivos_bp
-from backend.routes.planificador import bp as planner_bp
-from backend.routes.abastecimiento import bp as abastecimiento_bp
+from backend.routes.catalogos import bp as catalogos_bp  # type: ignore
+from backend.routes.archivos import bp as archivos_bp  # type: ignore
+from backend.routes.planificador import bp as planner_bp  # type: ignore
+from backend.routes.abastecimiento import bp as abastecimiento_bp  # type: ignore
 # from backend.routes.ai import bp as ai_bp
 
 def _setup_logging(app: Flask) -> None:

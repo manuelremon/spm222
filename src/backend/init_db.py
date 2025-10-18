@@ -4,7 +4,7 @@ import csv
 import os
 import sqlite3
 import unicodedata
-from typing import Callable, Iterable, Sequence
+from typing import Callable, Iterable, Sequence, Any
 
 from .config import Settings
 from .db import get_connection
@@ -154,7 +154,7 @@ def _to_bool(raw: object, default: bool = True) -> int:
 
 def _prepare_material_values(rows: list[dict[str, str]]) -> list[tuple[object, ...]]:
     values: list[tuple[object, ...]] = []
-    current: dict[str, object] | None = None
+    current: dict[str, Any] | None = None
 
     def flush_current() -> None:
         nonlocal current
@@ -240,7 +240,7 @@ def _backfill_catalog_tables(con: sqlite3.Connection) -> None:
         for row in con.execute("SELECT codigo FROM catalog_almacenes")
     }
 
-    almacenes_detected: dict[str, dict[str, object]] = {}
+    almacenes_detectados: dict[str, dict[str, Any]] = {}
     for row in con.execute(
         """
         SELECT almacen_virtual, centro
@@ -252,7 +252,7 @@ def _backfill_catalog_tables(con: sqlite3.Connection) -> None:
         code, name, description = _parse_almacen_literal(literal)
         if not code:
             continue
-        entry = almacenes_detected.setdefault(
+        entry = almacenes_detectados.setdefault(
             code,
             {"nombre": name or code, "descripcion": description, "centros": set()},
         )
@@ -261,7 +261,7 @@ def _backfill_catalog_tables(con: sqlite3.Connection) -> None:
             entry["centros"].add(centro)
 
     almacen_rows = []
-    for code, meta in sorted(almacenes_detected.items(), key=lambda item: item[0]):
+    for code, meta in sorted(almacenes_detectados.items(), key=lambda item: item[0]):
         if _normalize_catalog_key(code) in existing_almacenes:
             continue
         centros = sorted(meta.get("centros") or [])
@@ -679,7 +679,7 @@ def build_db(force: bool = False) -> None:
         materiales_csv = os.path.join(data_dir, "Materiales.csv")
         presupuestos_csv = os.path.join(data_dir, "Presupuestos.csv")
         catalog_csv_paths = {
-            table: os.path.join(data_dir, meta["filename"])
+            table: os.path.join(data_dir, meta["filename"])  # type: ignore[operator]
             for table, meta in CATALOG_CSV_SOURCES.items()
         }
 
@@ -882,7 +882,7 @@ def build_db(force: bool = False) -> None:
                     else:
                         text = (value or "").strip() if isinstance(value, str) else value
                         value = text or None
-                    if col == columns[0] and not value:
+                    if col == columns[0] and not value:  # type: ignore[operator]
                         skip = True
                         break
                     record.append(value)
@@ -897,7 +897,7 @@ def build_db(force: bool = False) -> None:
                     update_parts.append(f"{col}=excluded.{col}")
                 else:
                     update_parts.append(f"{col}=COALESCE(excluded.{col}, {table}.{col})")
-            conflict_column = columns[0]
+            conflict_column = columns[0]  # type: ignore[operator]
             con.executemany(
                 f"""
                 INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})

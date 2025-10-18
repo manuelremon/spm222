@@ -14,7 +14,7 @@ class Settings:
     DB_PATH = os.getenv("SPM_DB_PATH", os.path.join(DATA_DIR, "spm.db"))
     LOG_PATH = os.getenv("SPM_LOG_PATH", os.path.join(LOGS_DIR, "app.log"))
     SECRET_KEY = os.getenv("SPM_SECRET_KEY", "CHANGE-ME-IN-PROD")
-    ACCESS_TOKEN_TTL = int(os.getenv("SPM_ACCESS_TTL", "3600"))
+    ACCESS_TOKEN_TTL = int(os.getenv("SPM_ACCESS_TTL", "86400"))  # 24 horas por defecto
     CORS_ORIGINS = _split_csv("SPM_CORS_ORIGINS", "http://localhost:8080")
     DEBUG = os.getenv("SPM_DEBUG", "0") == "1"
     ENV = os.getenv("SPM_ENV", "production")
